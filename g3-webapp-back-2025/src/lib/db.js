@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 
 const pool = new Pool({
-  user: 'g3db_app',
+  user: 'kose',
   host: '10.100.54.170',
   database: 'g3db',
   password: 'g3',
