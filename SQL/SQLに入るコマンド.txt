@@ -8,4 +8,5 @@ docker exec -it g3-postgres psql -U kose -d g3db
 
 pass: g3
 
-編集テスト
+Thunder Clientウィンドウ起動
+>Thunder Client: New Request

@@ -1,12 +1,12 @@
 // --- 必要なインポート ---
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'; // これが必須だよ！
 import db from '@/lib/db'; // DB接続用
 
 // requestの他に、paramsを受け取る
 export async function GET(request, { params }) {
   try {
     // URLからIDを取得 (例: /api/employees/1 の場合は id = "1")
-    const { id } = params;
+    const { id } = await params;
 
     // パラメータ化クエリでSQLインジェクションを防ぐ
     const query = 'SELECT * FROM employees WHERE employee_id = $1';
