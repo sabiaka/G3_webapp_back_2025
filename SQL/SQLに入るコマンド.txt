@@ -1,3 +1,5 @@
+docker exec -it g3-postgres psql -U postgres -d g3db
+
 docker exec -it g3-postgres psql -U oshiyama -d g3db
 
 docker exec -it g3-postgres psql -U nakamura -d g3db
