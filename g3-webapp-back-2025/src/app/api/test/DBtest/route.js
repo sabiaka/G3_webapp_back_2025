@@ -18,7 +18,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('DBエラー発生！:', error);
     return NextResponse.json(
-      { message: 'うわ、サーバーでエラーだって！' },
+      { message: 'サーバー側でエラー' },
       { status: 500 }
     );
   }
