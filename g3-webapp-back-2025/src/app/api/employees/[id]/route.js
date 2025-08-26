@@ -2,23 +2,31 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // DB接続用
 
-export async function GET(request) {
+// requestの他に、paramsを受け取る
+export async function GET(request, { params }) {
   try {
-    // クエリパラメータ取得
-    const { searchParams } = new URL(request.url);
-    const sort = searchParams.get('sort');
+    // URLからIDを取得 (例: /api/employees/1 の場合は id = "1")
+    const { id } = params;
 
-    let query = 'SELECT * FROM employees';
-    if (sort === 'price') {
-      query += ' ORDER BY price ASC';
+    // パラメータ化クエリでSQLインジェクションを防ぐ
+    const query = 'SELECT * FROM employees WHERE employee_id = $1';
+    const result = await db.query(query, [id]);
+
+    // IDに該当する従業員が見つからない場合
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'Employee not found' },
+        { status: 404 } // 404 Not Foundを返す
+      );
     }
 
-    const result = await db.query(query);
-    return NextResponse.json({ products: result.rows });
+    // 成功した場合は、従業員データ（1件）を返す
+    return NextResponse.json(result.rows[0]);
+
   } catch (error) {
     console.error('DBエラー発生！:', error);
     return NextResponse.json(
-      { message: 'サーバー側でエラー' },
+      { message: 'サーバー側でエラーが発生しました' },
       { status: 500 }
     );
   }
