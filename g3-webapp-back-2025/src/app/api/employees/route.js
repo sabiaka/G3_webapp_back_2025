@@ -6,15 +6,11 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const sort = searchParams.get('sort');
 
+    // ... (paramToColumnMapとfiltersの部分は変更なし) ...
     const paramToColumnMap = {
-      // 'employee_id': 'employee_id',
       'employee_name': 'employee_name',
-      // 'employee_user_id': 'employee_user_id',
       'is_active': 'employee_is_active',
-      // 'role_id': 'employee_role_id',
       'line_name': 'employee_line_name',
-      // 'special_notes': 'employee_special_notes',
-      // 'color_code': 'employee_color_code'
     };
 
     const filters = {};
@@ -27,6 +23,7 @@ export async function GET(request) {
       }
     }
 
+    // ★★★ここまでのSQLを組み立てるロジックは一切変更しません★★★
     let query = `
       SELECT
         employee_id,
@@ -65,8 +62,23 @@ export async function GET(request) {
     }
 
     const result = await db.query(query, queryParams);
+    
+    // ▼▼▼ ここからが追加したコードです ▼▼▼
+    // result.rowsの各オブジェクトのキー名を変更する
+    const formattedEmployees = result.rows.map(employee => ({
+      employee_id: employee.employee_id,
+      employee_name: employee.employee_name,
+      employee_user_id: employee.employee_user_id,
+      is_active: employee.employee_is_active,           // ここでキー名を変更
+      role_name: employee.employee_role_name,         // ここでキー名を変更
+      line_name: employee.employee_line_name,         // ここでキー名を変更
+      special_notes: employee.employee_special_notes,   // ここでキー名を変更
+      color_code: employee.employee_color_code        // ここでキー名を変更
+    }));
+    // ▲▲▲ ここまでが追加したコードです ▲▲▲
 
-    return NextResponse.json({ employees: result.rows });
+    // 返すデータを、キー名を変更したformattedEmployeesに変更する
+    return NextResponse.json({ employees: formattedEmployees });
 
   } catch (error) {
     console.error('DBエラー発生！:', error);
