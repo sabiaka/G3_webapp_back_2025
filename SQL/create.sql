@@ -17,12 +17,12 @@ CREATE TABLE employees (
     employee_user_id VARCHAR(50) UNIQUE NOT NULL, -- ユーザーID（ログイン用、一意）
     employee_password VARCHAR(255) NOT NULL,      -- パスワード（ハッシュ保存推奨）
     employee_is_active BOOLEAN DEFAULT TRUE,      -- 有効/無効フラグ（TRUE=有効）
-    employee_role_id INT,                        -- 権限ID（rolesテーブルの外部キー）
-    employee_line_id INT,                        -- 担当ラインID（production_linesテーブルの外部キー）
+    employee_role_name VARCHAR(50) NOT NULL,      -- 権限name
+    employee_line_name VARCHAR(50) NOT NULL,      -- 担当ラインname
     employee_special_notes TEXT,                 -- 特記事項（任意のメモなど）
-    employee_color_code CHAR(6),                 -- カラーコード（例: "FF0000"）
-    FOREIGN KEY (employee_role_id) REFERENCES roles(role_id),
-    FOREIGN KEY (employee_line_id) REFERENCES production_lines(line_id)
+    employee_color_code CHAR(6)                 -- カラーコード（例: "FF0000"）
+    --FOREIGN KEY (employee_role_name) REFERENCES roles(role_id),
+    --FOREIGN KEY (employee_line_name) REFERENCES production_lines(line_id)
 );
 
 -- 【Reports(日報)】
