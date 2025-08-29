@@ -155,3 +155,35 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ message: msg }, { status: 500 });
   }
 }
+// 既存:
+// import { NextResponse } from 'next/server';
+// import db from '@/lib/db';
+
+export async function DELETE(request, { params }) {
+  try {
+    const { id } = params;
+
+    // 該当従業員を論理削除（is_active=false）
+    const result = await db.query(
+      `UPDATE employees
+          SET employee_is_active = false
+        WHERE employee_id = $1
+        RETURNING employee_is_active;`,
+      [id]
+    );
+
+    // レコードがなければ 404
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+    }
+
+    // すでに false でも成功扱いで 204
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    console.error('DELETE(論理削除)エラー:', error);
+    return NextResponse.json(
+      { message: 'サーバー側でエラーが発生しました' },
+      { status: 500 }
+    );
+  }
+}
