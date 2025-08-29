@@ -16,12 +16,12 @@ INSERT INTO production_lines (line_name) VALUES
 
 -- employees (従業員) テーブルへの仮データ挿入
 -- パスワードは実際にはハッシュ化して保存してください
-INSERT INTO employees (employee_name, employee_user_id, employee_password, employee_is_active, employee_role_id, employee_line_id, employee_special_notes, employee_color_code) VALUES
-('山田 太郎', 'yamada.taro', 'password123', TRUE, 1, 1, 'システム管理者。', 'FF5733'),
-('佐藤 花子', 'sato.hanako', 'password123', TRUE, 2, 1, '組立担当。', '33CFFF'),
-('鈴木 一郎', 'suzuki.ichiro', 'password123', TRUE, 3, 2, '塗装ラインのリーダー。', 'DAF7A6'),
-('田中 美咲', 'tanaka.misaki', 'password123', TRUE, 4, 3, '検査部門の新人。', 'FFC300'),
-('伊藤 健太', 'ito.kenta', 'password123', TRUE, 5, 4, '梱包作業担当。', 'C70039');
+INSERT INTO employees (employee_name, employee_user_id, employee_password, employee_is_active, employee_role_name, employee_line_name, employee_special_notes, employee_color_code) VALUES
+('山田 太郎', 'yamada.taro', 'password123', TRUE, 'リーダー', '組立', 'システム管理者。', 'FF5733'),
+('佐藤 花子', 'sato.hanako', 'password123', TRUE, 'サブリーダー', '組立', '組立担当。', '33CFFF'),
+('鈴木 一郎', 'suzuki.ichiro', 'password123', TRUE, '一般', '検査', '塗装ラインのリーダー。', 'DAF7A6'),
+('田中 美咲', 'tanaka.misaki', 'password123', TRUE, '一般', '検査', '検査部門の新人。', 'FFC300'),
+('伊藤 健太', 'ito.kenta', 'password123', TRUE, '一般', '検査', '梱包作業担当。', 'C70039');
 
 -- reports (日報) テーブルへの仮データ挿入
 INSERT INTO reports (report_employee_id, report_date, report_product_name, report_line_id, report_production_result, report_today_work, report_memo) VALUES
