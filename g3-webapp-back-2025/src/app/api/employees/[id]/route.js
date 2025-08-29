@@ -20,8 +20,21 @@ export async function GET(request, { params }) {
       );
     }
 
-    // 成功した場合は、従業員データ（1件）を返す
-    return NextResponse.json(result.rows[0]);
+    // 取得した1件のデータを整形
+    const employee = result.rows[0];
+    const formattedEmployee = {
+      employee_id: employee.employee_id,
+      employee_name: employee.employee_name,
+      employee_user_id: employee.employee_user_id,
+      is_active: employee.employee_is_active,
+      role_name: employee.employee_role_name,
+      line_name: employee.employee_line_name,
+      special_notes: employee.employee_special_notes,
+      color_code: employee.employee_color_code,
+    };
+
+    // 成功した場合は、整形済み従業員データ（1件）を返す
+    return NextResponse.json(formattedEmployee);
 
   } catch (error) {
     console.error('DBエラー発生！:', error);
