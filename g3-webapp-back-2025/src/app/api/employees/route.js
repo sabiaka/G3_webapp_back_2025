@@ -8,7 +8,7 @@ export async function GET(request) {
     const sort = searchParams.get('sort');
 
     const paramToColumnMap = {
-      'employee_name': 'employee_name',
+      'name_like': 'employee_name',
       'is_active': 'employee_is_active',
       'line_name': 'employee_line_name',
     };
