@@ -61,7 +61,6 @@ export async function GET(request) {
     }
 
     const result = await db.query(query, queryParams);
-    
     const formattedEmployees = result.rows.map(employee => ({
       employee_id: employee.employee_id,
       employee_name: employee.employee_name,
@@ -99,50 +98,48 @@ export async function GET(request) {
   }
 }
 
+
+
+
+
+
+
+
+
+
+// POST関数を新しいDBに合わせて修正
 export async function POST(request) {
   try {
-    /*
-     * ===============================================================
-     * JSONデータの受信 (リクエスト)
-     * ===============================================================
-     * request.json() は、クライアントからPOSTメソッドで送信されてきた
-     * リクエストボディ内のJSONデータを読み取るための非同期関数です。
-     * * 内部的な動作:
-     * 1. クライアントからのリクエストヘッダー 'Content-Type: application/json' を確認する。
-     * 2. リクエストボディのJSON文字列を読み取る。
-     * 3. 読み取ったJSON文字列をパース（解析）して、JavaScriptのオブジェクトに変換する。
-     * 4. 変換されたオブジェクトを 'body' 定数に格納する。
-     * * この行が正常に実行されることで、'body' には
-     * { "employee_name": "...", "password": "..." } のようなオブジェクトが入ります。
-     * ===============================================================
-     */
     const body = await request.json();
     const { 
       employee_name, 
       employee_user_id, 
       password, 
-      role_id, 
-      line_id, 
+      // ★変更点1: IDではなく名前を受け取るように変更
+      role_name:employee_role_name, 
+      line_name:employee_line_name, 
       color_code, 
       special_notes 
     } = body;
 
-    if (!employee_name || !employee_user_id || !password) {
+    // ★変更点2: role_nameとline_nameも必須項目としてチェック
+    if (!employee_name || !employee_user_id || !password || !employee_role_name || !employee_line_name) {
       return NextResponse.json(
-        { message: '必須項目（employee_name, employee_user_id, password）が不足しています。' },
+        { message: '必須項目が不足しています。' },
         { status: 400 }
       );
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // ★変更点3: INSERTする列名とVALUESの変数を変更
     const query = `
       INSERT INTO employees (
         employee_name, 
         employee_user_id, 
-        employee_password_hash,
-        employee_role_id, 
-        employee_line_id, 
+        employee_password, -- DBの列名に合わせる（もしemployee_password_hashなら要修正）
+        employee_role_name, 
+        employee_line_name, 
         employee_color_code, 
         employee_special_notes
       ) 
@@ -152,18 +149,19 @@ export async function POST(request) {
         employee_name,
         employee_user_id,
         employee_is_active,
-        (SELECT role_name FROM roles WHERE role_id = $4) AS employee_role_name,
-        (SELECT line_name FROM lines WHERE line_id = $5) AS employee_line_name,
+        employee_role_name, -- ★変更点4: そのまま列を返す
+        employee_line_name, -- ★変更点4: そのまま列を返す
         employee_special_notes,
         employee_color_code;
     `;
     
+    // ★変更点5: クエリに渡す値の配列を変更
     const values = [
       employee_name, 
       employee_user_id, 
       hashedPassword, 
-      role_id, 
-      line_id, 
+      employee_role_name, 
+      employee_line_name, 
       color_code, 
       special_notes
     ];
@@ -171,28 +169,18 @@ export async function POST(request) {
     const result = await db.query(query, values);
     const newEmployee = result.rows[0];
 
+    // 返却するデータはキー名を調整する（任意）
     const formattedEmployee = {
       employee_id: newEmployee.employee_id,
       employee_name: newEmployee.employee_name,
       employee_user_id: newEmployee.employee_user_id,
       is_active: newEmployee.employee_is_active,
-      role_name: newEmployee.employee_role_name,
-      line_name: newEmployee.employee_line_name,
+      role_name: newEmployee.employee_role_name, // APIの返却値としてキー名をrole_nameに
+      line_name: newEmployee.employee_line_name, // APIの返却値としてキー名をline_nameに
       special_notes: newEmployee.employee_special_notes,
       color_code: newEmployee.employee_color_code,
     };
 
-    /*
-     * ===============================================================
-     * JSONデータの送信 (レスポンス)
-     * ===============================================================
-     * GET関数と同様に、ここでも NextResponse.json() を使って処理結果を返します。
-     * 新規登録に成功した従業員のデータ (formattedEmployee) をJSONに変換し、
-     * クライアントに送信しています。
-     * 第2引数で { status: 201 } を指定することで、HTTPステータスコードを
-     * '201 Created'（リソースの作成成功）に設定しています。
-     * ===============================================================
-     */
     return NextResponse.json(formattedEmployee, { status: 201 });
 
   } catch (error) {
