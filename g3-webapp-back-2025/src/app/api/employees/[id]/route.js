@@ -130,9 +130,9 @@ export async function PUT(request, { params }) {
 
     // password が string のときだけ更新
     if (typeof password === 'string') {
-      const hash = await bcrypt.hash(password, 10);
+      // ハッシュ化せずそのまま保存
       sets.push(`employee_password = $${i++}`);
-      vals.push(hash);
+      vals.push(password);
     }
 
     if (sets.length === 0) {
