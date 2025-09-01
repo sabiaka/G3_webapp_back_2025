@@ -61,7 +61,6 @@ export async function GET(request) {
     }
 
     const result = await db.query(query, queryParams);
-    
     const formattedEmployees = result.rows.map(employee => ({
       employee_id: employee.employee_id,
       employee_name: employee.employee_name,
@@ -99,71 +98,58 @@ export async function GET(request) {
   }
 }
 
+
+
+
+
+
+
+
+
+
+// POST関数からハッシュ化処理を削除
 export async function POST(request) {
   try {
-    /*
-     * ===============================================================
-     * JSONデータの受信 (リクエスト)
-     * ===============================================================
-     * request.json() は、クライアントからPOSTメソッドで送信されてきた
-     * リクエストボディ内のJSONデータを読み取るための非同期関数です。
-     * * 内部的な動作:
-     * 1. クライアントからのリクエストヘッダー 'Content-Type: application/json' を確認する。
-     * 2. リクエストボディのJSON文字列を読み取る。
-     * 3. 読み取ったJSON文字列をパース（解析）して、JavaScriptのオブジェクトに変換する。
-     * 4. 変換されたオブジェクトを 'body' 定数に格納する。
-     * * この行が正常に実行されることで、'body' には
-     * { "employee_name": "...", "password": "..." } のようなオブジェクトが入ります。
-     * ===============================================================
-     */
     const body = await request.json();
     const { 
       employee_name, 
       employee_user_id, 
-      password, 
-      role_id, 
-      line_id, 
+      password, // 平文のパスワード
+      role_name: employee_role_name, 
+      line_name: employee_line_name, 
       color_code, 
       special_notes 
     } = body;
 
-    if (!employee_name || !employee_user_id || !password) {
+    if (!employee_name || !employee_user_id || !password || !employee_role_name || !employee_line_name) {
       return NextResponse.json(
-        { message: '必須項目（employee_name, employee_user_id, password）が不足しています。' },
+        { message: '必須項目が不足しています。' },
         { status: 400 }
       );
     }
     
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // const hashedPassword = await bcrypt.hash(password, 10); // ★この行を削除
 
     const query = `
       INSERT INTO employees (
         employee_name, 
         employee_user_id, 
-        employee_password_hash,
-        employee_role_id, 
-        employee_line_id, 
+        employee_password,
+        employee_role_name, 
+        employee_line_name, 
         employee_color_code, 
         employee_special_notes
       ) 
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING 
-        employee_id,
-        employee_name,
-        employee_user_id,
-        employee_is_active,
-        (SELECT role_name FROM roles WHERE role_id = $4) AS employee_role_name,
-        (SELECT line_name FROM lines WHERE line_id = $5) AS employee_line_name,
-        employee_special_notes,
-        employee_color_code;
+      RETURNING *;
     `;
     
     const values = [
       employee_name, 
       employee_user_id, 
-      hashedPassword, 
-      role_id, 
-      line_id, 
+      password, // ★ハッシュ化せず、元のパスワードを直接使用
+      employee_role_name, 
+      employee_line_name, 
       color_code, 
       special_notes
     ];
@@ -182,26 +168,15 @@ export async function POST(request) {
       color_code: newEmployee.employee_color_code,
     };
 
-    /*
-     * ===============================================================
-     * JSONデータの送信 (レスポンス)
-     * ===============================================================
-     * GET関数と同様に、ここでも NextResponse.json() を使って処理結果を返します。
-     * 新規登録に成功した従業員のデータ (formattedEmployee) をJSONに変換し、
-     * クライアントに送信しています。
-     * 第2引数で { status: 201 } を指定することで、HTTPステータスコードを
-     * '201 Created'（リソースの作成成功）に設定しています。
-     * ===============================================================
-     */
     return NextResponse.json(formattedEmployee, { status: 201 });
 
   } catch (error) {
     console.error('DBエラー発生！:', error);
     if (error.code === '23505') {
-       return NextResponse.json(
-         { message: '指定されたemployee_user_idは既に使用されています。' },
-         { status: 409 }
-       );
+        return NextResponse.json(
+          { message: '指定されたemployee_user_idは既に使用されています。' },
+          { status: 409 }
+        );
     }
     return NextResponse.json(
       { message: 'サーバーでエラーが発生しました。' },
