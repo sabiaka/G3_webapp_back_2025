@@ -87,18 +87,41 @@ INSERT INTO production_reports (prodreport_date, prodreport_product_name, prodre
 ('2025-07-24', '製品B', 200, 195, 97.50, 1, 3, '塗料のトラブルで一時停止。'),
 ('2025-07-24', '製品C', 500, 500, 100.00, 2, 4, '検査完了。');
 
+
+INSERT INTO racks (rack_name, rows, columns) VALUES ('メッシュラック #1', 3, 4);
+
+
+INSERT INTO parts_inventory (rack_id, slot_area, box_id, part_name, part_model_number, quantity, color_code) VALUES (1, 'A-1', 'BOX-001', 'スプリングA', 'SP-A-001', 10, '#FF5733');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 -- racks (棚マスタ) テーブルへの仮データ挿入
-INSERT INTO racks (rack_name, rack_location, rack_qr_path) VALUES
-('A-1棚', '第1倉庫 A-1列', '/qrcodes/racks/A-1.png'),
-('B-5棚', '第2倉庫 B-5列', '/qrcodes/racks/B-5.png'),
-('C-3棚', '第1倉庫 C-3列', '/qrcodes/racks/C-3.png'),
-('D-8棚', '第3倉庫 D-8列', '/qrcodes/racks/D-8.png'),
-('E-2棚', '第2倉庫 E-2列', '/qrcodes/racks/E-2.png');
+--INSERT INTO racks (rack_name, rack_location, rack_qr_path) VALUES
+--('A-1棚', '第1倉庫 A-1列', '/qrcodes/racks/A-1.png'),
+---('B-5棚', '第2倉庫 B-5列', '/qrcodes/racks/B-5.png'),
+--('C-3棚', '第1倉庫 C-3列', '/qrcodes/racks/C-3.png'),
+--('D-8棚', '第3倉庫 D-8列', '/qrcodes/racks/D-8.png'),
+--('E-2棚', '第2倉庫 E-2列', '/qrcodes/racks/E-2.png');
 
 -- parts_inventory (部品在庫) テーブルへの仮データ挿入
-INSERT INTO parts_inventory (parts_rack_id, parts_name, parts_number, parts_quantity, parts_qr_path) VALUES
-(1, 'M4ネジ', 'SC-M4-10-SUS', 5000, '/qrcodes/parts/SC-M4-10-SUS.png'),
-(1, '標準バネ', 'SP-STD-01', 2500, '/qrcodes/parts/SP-STD-01.png'),
-(2, 'フック（シルバー）', 'HK-SLV-M-V2', 1500, '/qrcodes/parts/HK-SLV-M-V2.png'),
-(3, '装飾パネル（ブラック）', 'PN-BLK-L-01', 800, '/qrcodes/parts/PN-BLK-L-01.png'),
-(4, '梱包箱M', 'BOX-M-01', 1200, '/qrcodes/parts/BOX-M-01.png');
+--INSERT INTO parts_inventory (parts_rack_id, parts_name, parts_number, parts_quantity, parts_qr_path) VALUES
+--(1, 'M4ネジ', 'SC-M4-10-SUS', 5000, '/qrcodes/parts/SC-M4-10-SUS.png'),
+--(1, '標準バネ', 'SP-STD-01', 2500, '/qrcodes/parts/SP-STD-01.png'),
+--(2, 'フック（シルバー）', 'HK-SLV-M-V2', 1500, '/qrcodes/parts/HK-SLV-M-V2.png'),
+--(3, '装飾パネル（ブラック）', 'PN-BLK-L-01', 800, '/qrcodes/parts/PN-BLK-L-01.png'),
+--(4, '梱包箱M', 'BOX-M-01', 1200, '/qrcodes/parts/BOX-M-01.png');

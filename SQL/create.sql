@@ -115,25 +115,70 @@ CREATE TABLE production_reports (
 );
 
 
--- 【racks テーブル（棚マスタ）】
+
+
+
+
 CREATE TABLE racks (
-    rack_id SERIAL PRIMARY KEY,              -- レコードID（自動連番）
-    rack_name VARCHAR(100) UNIQUE NOT NULL,  -- 棚の名前（例: "A-1棚"）
-    rack_location VARCHAR(255) NOT NULL,     -- 保管場所（例: "第1倉庫 A-1列"）
-    rack_qr_path VARCHAR(255)                -- QRコード画像パス
+    -- 棚固有のID (自動採番)
+    rack_id SERIAL PRIMARY KEY,
+    -- 棚の名前 (例: メッシュラック #1)
+    rack_name VARCHAR(255) NOT NULL UNIQUE,
+    -- 棚の行数 (例: 3)。0以下の値は登録できない
+    rows INT NOT NULL CHECK (rows > 0),
+    -- 棚の列数 (例: 4)。0以下の値は登録できない
+    columns INT NOT NULL CHECK (columns > 0)
+);
+
+CREATE TABLE parts_inventory (
+    -- 在庫データ固有のID (自動採番)
+    id SERIAL PRIMARY KEY,
+    -- どの棚にあるかを示すID (racksテーブルのrack_idと連携)
+    rack_id INT NOT NULL,
+    -- 保管されている行列 (例: 1)
+    slot_area VARCHAR(10) NOT NULL,
+    -- 部品情報 (空のスロットを表現するため、NULLを許容)
+    box_id VARCHAR(100) NULL,
+    part_name VARCHAR(255) NULL,
+    part_model_number VARCHAR(100) NULL,
+    -- 部品個数 (空きスロットの場合はデフォルトで0が入る)
+    quantity INT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    -- カラーコード
+    color_code VARCHAR(7) NOT NULL DEFAULT '#CCCCCC',
+    -- 【重要】同じ棚の同じ場所に重複して登録できないようにする制約
+    UNIQUE (rack_id, slot_area),
+    -- 外部キー制約: 存在しない棚IDの登録を防ぐ
+    FOREIGN KEY (rack_id) REFERENCES racks(rack_id) ON DELETE CASCADE
 );
 
 
+
+
+
+
+
+
+
+
+
+
+-- 【racks テーブル（棚マスタ）】
+--CREATE TABLE racks (
+    --rack_id SERIAL PRIMARY KEY,              -- レコードID（自動連番）
+    --rack_name VARCHAR(100) UNIQUE NOT NULL,  -- 棚の名前（例: "A-1棚"）
+    --rack_location VARCHAR(255) NOT NULL,     -- 保管場所（例: "第1倉庫 A-1列"）
+    --rack_qr_path VARCHAR(255)                -- QRコード画像パス
+--);
 
 -- 【parts_inventory テーブル（部品在庫）】
-CREATE TABLE parts_inventory (
-    parts_id SERIAL PRIMARY KEY,                 -- 部品在庫ID（自動連番）
-    parts_rack_id INT NOT NULL,                  -- 棚ID（外部キー）
-    parts_name VARCHAR(100) NOT NULL,            -- 部品名
-    parts_number VARCHAR(100) NOT NULL,          -- 部品型番
-    parts_quantity INT NOT NULL DEFAULT 0,       -- 部品個数
-    parts_qr_path VARCHAR(255),                  -- 出庫用QRコード画像パス
-    parts_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (parts_rack_id) REFERENCES racks(rack_id) -- 外部キー制約
-);
+--CREATE TABLE parts_inventory (
+    --parts_id SERIAL PRIMARY KEY,                 -- 部品在庫ID（自動連番）
+    --parts_rack_id INT NOT NULL,                  -- 棚ID（外部キー）
+    --parts_name VARCHAR(100) NOT NULL,            -- 部品名
+    --parts_number VARCHAR(100) NOT NULL,          -- 部品型番
+    --parts_quantity INT NOT NULL DEFAULT 0,       -- 部品個数
+    --parts_qr_path VARCHAR(255),                  -- 出庫用QRコード画像パス
+    --parts_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    --FOREIGN KEY (parts_rack_id) REFERENCES racks(rack_id) -- 外部キー制約
+--);
 
