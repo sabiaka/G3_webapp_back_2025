@@ -121,7 +121,7 @@ CREATE TABLE racks (
     rack_id SERIAL PRIMARY KEY,
     -- 棚の名前 (例: スプリング・小物資材ラック)
     rack_name VARCHAR(255) NOT NULL UNIQUE,
-    -- 棚の行数 (A, B, C...)
+    -- 棚の行数 (1, 2, 3...)
     rows INT NOT NULL CHECK (rows > 0),
     -- 棚の列数 (1, 2, 3...)
     cols INT NOT NULL CHECK (cols > 0)
