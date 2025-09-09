@@ -1,189 +1,84 @@
-//これracks内のroute.jsね。
-
-
+// src/app/api/racks/route.js
 import { NextResponse } from 'next/server';
-import db from '@/lib/db';
-import bcrypt from 'bcrypt';
+import db from '@/lib/db'; // ←あなたの接続ユーティリティに合わせて
 
-export async function GET(request) {
+// GET /api/racks            → 全件
+// GET /api/racks?id=1       → id=1 のみ
+export async function GET(req) {
+  const { searchParams } = new URL(req.url);
+  const idParam = searchParams.get('id');
+
   try {
-    const { searchParams } = new URL(request.url);
-    const sort = searchParams.get('sort');
-
-    const paramToColumnMap = {
-      'name_like': 'employee_name',
-      'is_active': 'employee_is_active',
-      'line_name': 'employee_line_name',
-    };
-
-    const filters = {};
-    for (const [param, column] of Object.entries(paramToColumnMap)) {
-      if (searchParams.has(param)) {
-        const value = searchParams.get(param);
-        if (value !== null && value !== '') {
-          filters[column] = value;
-        }
+    if (idParam !== null) {
+      const id = Number(idParam);
+      if (!Number.isInteger(id)) {
+        return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
       }
-    }
 
-    let query = `
-      SELECT
-        employee_id,
-        employee_name,
-        employee_user_id,
-        employee_is_active,
-        employee_role_name,
-        employee_line_name,
-        employee_special_notes,
-        employee_color_code
-      FROM employees
-    `;
-
-    const whereClauses = [];
-    const queryParams = [];
-    let paramIndex = 1;
-
-    for (const [key, value] of Object.entries(filters)) {
-      if (key === 'employee_name' || key === 'employee_special_notes') {
-        whereClauses.push(`${key} LIKE $${paramIndex++}`);
-        queryParams.push(`%${value}%`);
-      } else {
-        whereClauses.push(`${key} = $${paramIndex++}`);
-        queryParams.push(value);
+      const result = await db.query(
+        'SELECT rack_id, rack_name, rows, cols FROM racks WHERE rack_id = $1',
+        [id]
+      );
+      if (result.rows.length === 0) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
+      return NextResponse.json(result.rows[0]);
     }
 
-    if (whereClauses.length > 0) {
-      query += ` WHERE ${whereClauses.join(' AND ')}`;
-    }
-
-    if (sort === 'id_asc') {
-      query += ' ORDER BY employee_id ASC';
-    } else if (sort === 'id_desc') {
-      query += ' ORDER BY employee_id DESC';
-    }
-
-    const result = await db.query(query, queryParams);
-    const formattedEmployees = result.rows.map(employee => ({
-      employee_id: employee.employee_id,
-      employee_name: employee.employee_name,
-      employee_user_id: employee.employee_user_id,
-      is_active: employee.employee_is_active,
-      role_name: employee.employee_role_name,
-      line_name: employee.employee_line_name,
-      special_notes: employee.employee_special_notes,
-      color_code: employee.employee_color_code
-    }));
-    
-    /*
-     * ===============================================================
-     * JSONデータの送信 (レスポンス)
-     * ===============================================================
-     * NextResponse.json() は、APIの処理結果をクライアントに返すための重要な関数です。
-     * ここでは、データベースから取得した従業員リスト (formattedEmployees) を
-     * JSON形式のデータに変換して、HTTPレスポンスのボディに設定しています。
-     * クライアント側（フロントエンドなど）は、このJSONデータを受け取って画面に表示するなどの処理を行います。
-     * * 内部的な動作:
-     * 1. JavaScriptのオブジェクトや配列 ({ employees: formattedEmployees }) を受け取る。
-     * 2. これをJSON文字列にシリアライズ（変換）する。
-     * 3. HTTPレスポンスのヘッダーに自動的に 'Content-Type: application/json' を設定する。
-     * 4. このレスポンスをクライアントに送信する。
-     * ===============================================================
-     */
-    return NextResponse.json({ employees: formattedEmployees });
-
-  } catch (error) {
-    console.error('DBエラー発生！:', error);
-    return NextResponse.json(
-      { message: 'サーバーでエラーが発生しました。' },
-      { status: 500 }
+    // id が無ければ全件
+    const result = await db.query(
+      'SELECT rack_id, rack_name, rows, cols FROM racks ORDER BY rack_id'
     );
+    return NextResponse.json(result.rows);
+  } catch (err) {
+    console.error('[GET /api/racks] DB error:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-
-
-
-
-
-
-
-
-
-// POST関数からハッシュ化処理を削除
-export async function POST(request) {
+// 新規作成: POST /api/racks
+export async function POST(req) {
   try {
-    const body = await request.json();
-    const { 
-      employee_name, 
-      employee_user_id, 
-      password, // 平文のパスワード
-      role_name: employee_role_name, 
-      line_name: employee_line_name, 
-      color_code, 
-      special_notes 
-    } = body;
+    const body = await req.json();
+    const rack_name = (body?.rack_name ?? '').trim();
+    const rows = Number(body?.rows);
+    const cols = Number(body?.cols);
 
-    if (!employee_name || !employee_user_id || !password || !employee_role_name || !employee_line_name) {
-      return NextResponse.json(
-        { message: '必須項目が不足しています。' },
-        { status: 400 }
-      );
+    // バリデーション
+    if (!rack_name) {
+      return NextResponse.json({ error: 'rack_name is required' }, { status: 400 });
     }
-    
-    // const hashedPassword = await bcrypt.hash(password, 10); // ★この行を削除
-
-    const query = `
-      INSERT INTO employees (
-        employee_name, 
-        employee_user_id, 
-        employee_password,
-        employee_role_name, 
-        employee_line_name, 
-        employee_color_code, 
-        employee_special_notes
-      ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *;
-    `;
-    
-    const values = [
-      employee_name, 
-      employee_user_id, 
-      password, // ★ハッシュ化せず、元のパスワードを直接使用
-      employee_role_name, 
-      employee_line_name, 
-      color_code, 
-      special_notes
-    ];
-    
-    const result = await db.query(query, values);
-    const newEmployee = result.rows[0];
-
-    const formattedEmployee = {
-      employee_id: newEmployee.employee_id,
-      employee_name: newEmployee.employee_name,
-      employee_user_id: newEmployee.employee_user_id,
-      is_active: newEmployee.employee_is_active,
-      role_name: newEmployee.employee_role_name,
-      line_name: newEmployee.employee_line_name,
-      special_notes: newEmployee.employee_special_notes,
-      color_code: newEmployee.employee_color_code,
-    };
-
-    return NextResponse.json(formattedEmployee, { status: 201 });
-
-  } catch (error) {
-    console.error('DBエラー発生！:', error);
-    if (error.code === '23505') {
-        return NextResponse.json(
-          { message: '指定されたemployee_user_idは既に使用されています。' },
-          { status: 409 }
-        );
+    if (!Number.isInteger(rows) || rows <= 0) {
+      return NextResponse.json({ error: 'rows must be a positive integer' }, { status: 400 });
     }
-    return NextResponse.json(
-      { message: 'サーバーでエラーが発生しました。' },
-      { status: 500 }
+    if (!Number.isInteger(cols) || cols <= 0) {
+      return NextResponse.json({ error: 'cols must be a positive integer' }, { status: 400 });
+    }
+
+    // INSERT（作成した rack を返す）
+    const result = await db.query(
+      `INSERT INTO racks (rack_name, rows, cols)
+       VALUES ($1, $2, $3)
+       RETURNING rack_id, rack_name, rows, cols`,
+      [rack_name, rows, cols]
     );
+
+    const created = result.rows[0];
+
+    // 仕様どおりの成功レスポンス
+    return NextResponse.json(
+      {
+        ...created,
+        message: '新しいラックが作成されました。'
+      },
+      { status: 201 }
+    );
+  } catch (err) {
+    // 例: PostgreSQL の一意制約違反 code = '23505'
+    if (err?.code === '23505') {
+      return NextResponse.json({ error: 'rack_name already exists' }, { status: 409 });
+    }
+    console.error('[POST /api/racks] DB error:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
