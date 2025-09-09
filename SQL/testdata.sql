@@ -99,3 +99,5 @@ INSERT INTO racks (rack_name, rows, cols) VALUES
 INSERT INTO slots (rack_id, slot_identifier, part_name, part_model_number, quantity, color_code) VALUES
 (1, 'A-1', 'ポケットコイル', 'PC-S-H20', 25, '#FF5733');
 
+INSERT INTO slots (rack_id, slot_identifier)VALUES
+(1, 'A-2');
