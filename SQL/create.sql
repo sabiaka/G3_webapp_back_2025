@@ -116,41 +116,34 @@ CREATE TABLE production_reports (
 
 
 
-
-
-
 CREATE TABLE racks (
-    -- 棚固有のID (自動採番)
+    -- 棚のID、自動で番号が振られる
     rack_id SERIAL PRIMARY KEY,
-    -- 棚の名前 (例: メッシュラック #1)
+    -- 棚の名前 (例: スプリング・小物資材ラック)
     rack_name VARCHAR(255) NOT NULL UNIQUE,
-    -- 棚の行数 (例: 3)。0以下の値は登録できない
+    -- 棚の行数 (A, B, C...)
     rows INT NOT NULL CHECK (rows > 0),
-    -- 棚の列数 (例: 4)。0以下の値は登録できない
-    columns INT NOT NULL CHECK (columns > 0)
+    -- 棚の列数 (1, 2, 3...)
+    cols INT NOT NULL CHECK (cols > 0)
 );
 
-CREATE TABLE parts_inventory (
-    -- 在庫データ固有のID (自動採番)
-    id SERIAL PRIMARY KEY,
-    -- どの棚にあるかを示すID (racksテーブルのrack_idと連携)
+CREATE TABLE slots (
+    -- スロットのID、これも自動
+    slot_id SERIAL PRIMARY KEY,
+    -- どの棚に属してるかのID
     rack_id INT NOT NULL,
-    -- 保管されている行列 (例: 1)
-    slot_area VARCHAR(10) NOT NULL,
-    -- 部品情報 (空のスロットを表現するため、NULLを許容)
-    box_id VARCHAR(100) NULL,
-    part_name VARCHAR(255) NULL,
-    part_model_number VARCHAR(100) NULL,
-    -- 部品個数 (空きスロットの場合はデフォルトで0が入る)
-    quantity INT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
-    -- カラーコード
-    color_code VARCHAR(7) NOT NULL DEFAULT '#CCCCCC',
-    -- 【重要】同じ棚の同じ場所に重複して登録できないようにする制約
-    UNIQUE (rack_id, slot_area),
-    -- 外部キー制約: 存在しない棚IDの登録を防ぐ
+    -- 場所を示す識別子 (例: 'A-1', 'C-4')
+    slot_identifier VARCHAR(10) NOT NULL,
+    -- ↓部品が入ってるときだけ値が入る↓
+    part_name VARCHAR(255),
+    part_model_number VARCHAR(100),
+    quantity INT CHECK (quantity >= 0),
+    color_code VARCHAR(7),
+    -- 同じ棚の同じ場所に2個は置けないようにする設定
+    UNIQUE (rack_id, slot_identifier),
+    -- 存在しない棚には部品を置けないようにする設定
     FOREIGN KEY (rack_id) REFERENCES racks(rack_id) ON DELETE CASCADE
 );
-
 
 
 
