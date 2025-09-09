@@ -1,63 +1,76 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db'; // PrismaとかDBに接続するやつ
+import db from '@/lib/db'; // ← PrismaとかDBに接続するやつ
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
   try {
-    // 1. フロントからユーザーIDとかパスワードを受け取る
+    // 1. フロントから送られてきた情報をゲット
     const body = await request.json();
-    const { employee_user_id, password, employee_name, employee_role_name, employee_line_name } = body;
+    const { employee_user_id, password } = body;
 
-    // 最低限の情報が入ってなかったらエラー
-    if (!employee_user_id || !password || !employee_name) {
+    // ユーザーIDとパスワードが入ってなかったら、そっこーエラー返す
+    if (!employee_user_id || !password) {
       return NextResponse.json(
-        { error: '必要な情報が足りてないよ！' },
+        { error: 'User ID and password are required' },
         { status: 400 }
       );
     }
-    
-    // すでに同じユーザーIDの人がいないかチェック
-    const existingUser = await db.employees.findUnique({
-        where: { employee_user_id },
-    });
 
-    if (existingUser) {
-        return NextResponse.json(
-            { error: 'そのユーザーIDはもう使われてるよん' },
-            { status: 409 } // 409: 競合
-        );
-    }
-
-    // 2. ここが最重要！パスワードをハッシュ化する✨
-    // 10っていうのはセキュリティの強さ。このままでOK！
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 3. DBに新しいユーザー情報を保存する
-    // 保存するのは、もちろんハッシュ化した後のパスワードね！
-    const newUser = await db.employees.create({
-      data: {
+    // 2. ユーザーIDを頼りにDBからユーザーを探す
+    // ※ここではPrismaを使ってる想定で書いてるよ！
+    const user = await db.employees.findUnique({
+      where: {
         employee_user_id: employee_user_id,
-        employee_password: hashedPassword, // ← ハッシュ化したやつをIN！
-        employee_name: employee_name,
-        employee_role_name: employee_role_name || '一般', // 指定がなければ'一般'
-        employee_line_name: employee_line_name || '未設定', // 指定がなければ'未設定'
-        // 他のデータも必要に応じて追加してね
       },
     });
 
-    // 4. 成功したことをフロントに伝える
-    // ※レスポンスにパスワードは絶対含めちゃダメだよ！
+    // 3. ユーザーが見つからないか、パスワードが違うかチェック
+    // ユーザーがいない、またはアカウントが無効になってたらNG
+    if (!user || !user.employee_is_active) {
+      return NextResponse.json(
+        { error: 'Invalid user ID or password' },
+        { status: 401 } // 401: 認証失敗
+      );
+    }
+
+    // bcryptでパスワードが合ってるかチェック！
+    // DBに保存されてるハッシュ化されたパスワードと、入力された生のパスワードを比べる
+    const isPasswordValid = await bcrypt.compare(password, user.employee_password);
+
+    // パスワードが違ったらNG
+    if (!isPasswordValid) {
+      return NextResponse.json(
+        { error: 'Invalid user ID or password' },
+        { status: 401 }
+      );
+    }
+
+    // 4. 認証OK！アクセストークン（JWT）を作ってあげる
+    const tokenPayload = {
+      employee_id: user.employee_id,
+      employee_user_id: user.employee_user_id,
+      role_name: user.employee_role_name,
+    };
+
+    // 秘密鍵を使ってトークンを生成！有効期限は7日にしといた
+    const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    // 5. API設計書通りに、イケてるレスポンスを返す
     return NextResponse.json({
-      message: 'ユーザー登録が成功しました',
+      access_token: accessToken,
       user: {
-        employee_id: newUser.employee_id,
-        employee_user_id: newUser.employee_user_id,
-        employee_name: newUser.employee_name,
+        employee_id: user.employee_id,
+        employee_name: user.employee_name,
+        role_name: user.employee_role_name,
       }
-    }, { status: 201 }); // 201: 作成成功
+    }, { status: 200 });
+
 
   } catch (error) {
-    console.error('ユーザー登録APIでエラー発生！:', error);
+    console.error('ログインAPIでエラー発生！:', error);
     return NextResponse.json(
       { message: 'サーバーでエラーが発生しました。' },
       { status: 500 }
