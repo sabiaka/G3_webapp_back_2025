@@ -17,12 +17,12 @@ CREATE TABLE employees (
     employee_user_id VARCHAR(50) UNIQUE NOT NULL, -- ユーザーID（ログイン用、一意）
     employee_password VARCHAR(255) NOT NULL,      -- パスワード（ハッシュ保存推奨）
     employee_is_active BOOLEAN DEFAULT TRUE,      -- 有効/無効フラグ（TRUE=有効）
-    employee_role_id INT,                        -- 権限ID（rolesテーブルの外部キー）
-    employee_line_id INT,                        -- 担当ラインID（production_linesテーブルの外部キー）
+    employee_role_name VARCHAR(50) NOT NULL,      -- 権限name
+    employee_line_name VARCHAR(50) NOT NULL,      -- 担当ラインname
     employee_special_notes TEXT,                 -- 特記事項（任意のメモなど）
-    employee_color_code CHAR(6),                 -- カラーコード（例: "FF0000"）
-    FOREIGN KEY (employee_role_id) REFERENCES roles(role_id),
-    FOREIGN KEY (employee_line_id) REFERENCES production_lines(line_id)
+    employee_color_code CHAR(6)                 -- カラーコード（例: "FF0000"）
+    --FOREIGN KEY (employee_role_name) REFERENCES roles(role_id),
+    --FOREIGN KEY (employee_line_name) REFERENCES production_lines(line_id)
 );
 
 -- 【Reports(日報)】
@@ -85,11 +85,11 @@ CREATE TABLE machine_status (
 
 -- 【Inspection Images (検査画像) の分離構造(必要に応じて)】
 CREATE TABLE inspection_results (
-    inspection_id SERIAL PRIMARY KEY,           -- 検査ID（自動採番）
-    inspection_image_path TEXT NOT NULL,        -- 検査画像パス
+    inspection_id SERIAL PRIMARY KEY,            -- 検査ID（自動採番）
     inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 撮影日時
-    inspection_status VARCHAR(50) NOT NULL,     -- 検査結果（良品、不良など）
-    inspection_trouble_info TEXT                -- 問題点詳細
+    inspection_status VARCHAR(50) NOT NULL,      -- 検査結果（良品、不良など）
+    inspection_trouble_info TEXT,                -- 問題点詳細
+    inspection_image_path TEXT NOT NULL          -- 検査画像パス
 );
 
 -- 【Machine Production(ホックリング残数・生産数)】
@@ -115,25 +115,63 @@ CREATE TABLE production_reports (
 );
 
 
--- 【racks テーブル（棚マスタ）】
+
 CREATE TABLE racks (
-    rack_id SERIAL PRIMARY KEY,              -- レコードID（自動連番）
-    rack_name VARCHAR(100) UNIQUE NOT NULL,  -- 棚の名前（例: "A-1棚"）
-    rack_location VARCHAR(255) NOT NULL,     -- 保管場所（例: "第1倉庫 A-1列"）
-    rack_qr_path VARCHAR(255)                -- QRコード画像パス
+    -- 棚のID、自動で番号が振られる
+    rack_id SERIAL PRIMARY KEY,
+    -- 棚の名前 (例: スプリング・小物資材ラック)
+    rack_name VARCHAR(255) NOT NULL UNIQUE,
+    -- 棚の行数 (1, 2, 3...)
+    rows INT NOT NULL CHECK (rows > 0),
+    -- 棚の列数 (1, 2, 3...)
+    cols INT NOT NULL CHECK (cols > 0)
+);
+
+CREATE TABLE slots (
+    -- スロットのID、これも自動
+    slot_id SERIAL PRIMARY KEY,
+    -- どの棚に属してるかのID
+    rack_id INT NOT NULL,
+    -- 場所を示す識別子 (例: 'A-1', 'C-4')
+    slot_identifier VARCHAR(10) NOT NULL,
+    -- ↓部品が入ってるときだけ値が入る↓
+    part_name VARCHAR(255),
+    part_model_number VARCHAR(100),
+    quantity INT CHECK (quantity >= 0),
+    color_code VARCHAR(7),
+    -- 同じ棚の同じ場所に2個は置けないようにする設定
+    UNIQUE (rack_id, slot_identifier),
+    -- 存在しない棚には部品を置けないようにする設定
+    FOREIGN KEY (rack_id) REFERENCES racks(rack_id) ON DELETE CASCADE
 );
 
 
+
+
+
+
+
+
+
+
+
+-- 【racks テーブル（棚マスタ）】
+--CREATE TABLE racks (
+    --rack_id SERIAL PRIMARY KEY,              -- レコードID（自動連番）
+    --rack_name VARCHAR(100) UNIQUE NOT NULL,  -- 棚の名前（例: "A-1棚"）
+    --rack_location VARCHAR(255) NOT NULL,     -- 保管場所（例: "第1倉庫 A-1列"）
+    --rack_qr_path VARCHAR(255)                -- QRコード画像パス
+--);
 
 -- 【parts_inventory テーブル（部品在庫）】
-CREATE TABLE parts_inventory (
-    parts_id SERIAL PRIMARY KEY,                 -- 部品在庫ID（自動連番）
-    parts_rack_id INT NOT NULL,                  -- 棚ID（外部キー）
-    parts_name VARCHAR(100) NOT NULL,            -- 部品名
-    parts_number VARCHAR(100) NOT NULL,          -- 部品型番
-    parts_quantity INT NOT NULL DEFAULT 0,       -- 部品個数
-    parts_qr_path VARCHAR(255),                  -- 出庫用QRコード画像パス
-    parts_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (parts_rack_id) REFERENCES racks(rack_id) -- 外部キー制約
-);
+--CREATE TABLE parts_inventory (
+    --parts_id SERIAL PRIMARY KEY,                 -- 部品在庫ID（自動連番）
+    --parts_rack_id INT NOT NULL,                  -- 棚ID（外部キー）
+    --parts_name VARCHAR(100) NOT NULL,            -- 部品名
+    --parts_number VARCHAR(100) NOT NULL,          -- 部品型番
+    --parts_quantity INT NOT NULL DEFAULT 0,       -- 部品個数
+    --parts_qr_path VARCHAR(255),                  -- 出庫用QRコード画像パス
+    --parts_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    --FOREIGN KEY (parts_rack_id) REFERENCES racks(rack_id) -- 外部キー制約
+--);
 
