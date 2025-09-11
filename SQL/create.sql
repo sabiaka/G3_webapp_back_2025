@@ -85,11 +85,11 @@ CREATE TABLE machine_status (
 
 -- 【Inspection Images (検査画像) の分離構造(必要に応じて)】
 CREATE TABLE inspection_results (
-    inspection_id SERIAL PRIMARY KEY,           -- 検査ID（自動採番）
-    inspection_image_path TEXT NOT NULL,        -- 検査画像パス
+    inspection_id SERIAL PRIMARY KEY,            -- 検査ID（自動採番）
     inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 撮影日時
-    inspection_status VARCHAR(50) NOT NULL,     -- 検査結果（良品、不良など）
-    inspection_trouble_info TEXT                -- 問題点詳細
+    inspection_status VARCHAR(50) NOT NULL,      -- 検査結果（良品、不良など）
+    inspection_trouble_info TEXT,                -- 問題点詳細
+    inspection_image_path TEXT NOT NULL          -- 検査画像パス
 );
 
 -- 【Machine Production(ホックリング残数・生産数)】

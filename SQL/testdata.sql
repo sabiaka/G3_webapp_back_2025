@@ -64,12 +64,11 @@ INSERT INTO machine_status (machine_id, machine_status, machine_trouble_info, ma
 (5, 'メンテ中', '部品交換作業中。', '2025-07-22');
 
 -- inspection_results (検査画像) テーブルへの仮データ挿入
-INSERT INTO inspection_results (inspection_image_path, inspection_status, inspection_trouble_info) VALUES
-('/images/inspection/20250724_001.jpg', '良品', NULL),
-('/images/inspection/20250724_002.jpg', '不良', '表面に傷あり。'),
-('/images/inspection/20250724_003.jpg', '良品', NULL),
-('/images/inspection/20250724_004.jpg', '良品', NULL),
-('/images/inspection/20250724_005.jpg', '不良', '異物混入の疑い。');
+INSERT INTO inspection_results (inspection_status, inspection_trouble_info, inspection_image_path) VALUES
+('PASS', NULL, '/images/inspection/20250901_01.jpg'),
+('FAIL', '位置ずれ', '/images/inspection/20250901_02.jpg');
+
+
 
 -- machine_production (ホックリング残数・生産数) テーブルへの仮データ挿入
 INSERT INTO machine_production (machine_prod_hook_remaining, machine_prod_count) VALUES
@@ -89,15 +88,14 @@ INSERT INTO production_reports (prodreport_date, prodreport_product_name, prodre
 
 
 
-
+--棚作成
 INSERT INTO racks (rack_name, rows, cols) VALUES
 ('スプリング・小物資材ラック', 3, 4);
 
-
-
--- rack_id=1 の棚 ('スプリング・小物資材ラック') に部品を追加します
+--上記rack_id=1('スプリング・小物資材ラック')に部品追加
 INSERT INTO slots (rack_id, slot_identifier, part_name, part_model_number, quantity, color_code) VALUES
 (1, 'A-1', 'ポケットコイル', 'PC-S-H20', 25, '#FF5733');
 
+--空スロット用
 INSERT INTO slots (rack_id, slot_identifier)VALUES
 (1, 'A-2');
