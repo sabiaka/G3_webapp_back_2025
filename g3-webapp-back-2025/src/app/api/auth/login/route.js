@@ -1,78 +1,102 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db'; // ← PrismaとかDBに接続するやつ
+import db from '@/lib/db';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
+/*
+ * POST /api/auth/login
+ * 要件: registerと同様にPrisma風ではなく生SQL + db.query を使用
+ * 手順:
+ *  1. 入力バリデーション
+ *  2. ユーザー取得 (employee_user_id)
+ *  3. activeチェック
+ *  4. パスワード検証（bcrypt / 平文フォールバック）
+ *  5. JWT発行
+ */
 export async function POST(request) {
   try {
-    // 1. フロントから送られてきた情報をゲット
     const body = await request.json();
-    const { employee_user_id, password } = body;
+    const { employee_user_id, password } = body || {};
 
-    // ユーザーIDとパスワードが入ってなかったら、そっこーエラー返す
     if (!employee_user_id || !password) {
       return NextResponse.json(
-        { error: 'User ID and password are required' },
+        { error: 'employee_user_id と password は必須です。' },
         { status: 400 }
       );
     }
 
-    // 2. ユーザーIDを頼りにDBからユーザーを探す
-    // ※ここではPrismaを使ってる想定で書いてるよ！
-    const user = await db.employees.findUnique({
-      where: {
-        employee_user_id: employee_user_id,
-      },
-    });
-
-    // 3. ユーザーが見つからないか、パスワードが違うかチェック
-    // ユーザーがいない、またはアカウントが無効になってたらNG
-    if (!user || !user.employee_is_active) {
+    const selectSql = `
+      SELECT employee_id, employee_user_id, employee_password, employee_name, employee_role_name, employee_is_active
+      FROM employees
+      WHERE employee_user_id = $1
+      LIMIT 1;
+    `;
+    const result = await db.query(selectSql, [employee_user_id]);
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Invalid user ID or password' },
-        { status: 401 } // 401: 認証失敗
+        { status: 401 }
       );
     }
+    const user = result.rows[0];
 
-    // bcryptでパスワードが合ってるかチェック！
-    // DBに保存されてるハッシュ化されたパスワードと、入力された生のパスワードを比べる
-    const isPasswordValid = await bcrypt.compare(password, user.employee_password);
-
-    // パスワードが違ったらNG
-    if (!isPasswordValid) {
+    if (!user.employee_is_active) {
       return NextResponse.json(
         { error: 'Invalid user ID or password' },
         { status: 401 }
       );
     }
 
-    // 4. 認証OK！アクセストークン（JWT）を作ってあげる
+    let passwordOk = false;
+    const stored = user.employee_password || '';
+    try {
+      if (stored.startsWith('$2')) { // bcrypt 形式
+        passwordOk = await bcrypt.compare(password, stored);
+      } else {
+        // 旧仕様(平文保存)フォールバック
+        passwordOk = (password === stored);
+      }
+    } catch (e) {
+      passwordOk = false;
+    }
+
+    if (!passwordOk) {
+      return NextResponse.json(
+        { error: 'Invalid user ID or password' },
+        { status: 401 }
+      );
+    }
+
+    if (!process.env.JWT_SECRET) {
+      return NextResponse.json(
+        { error: 'JWT_SECRET 未設定のためトークンを生成できません。' },
+        { status: 500 }
+      );
+    }
+
     const tokenPayload = {
       employee_id: user.employee_id,
       employee_user_id: user.employee_user_id,
       role_name: user.employee_role_name,
     };
 
-    // 秘密鍵を使ってトークンを生成！有効期限は7日にしといた
-    const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-      expiresIn: '7d',
-    });
+    const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    // 5. API設計書通りに、イケてるレスポンスを返す
-    return NextResponse.json({
-      access_token: accessToken,
-      user: {
-        employee_id: user.employee_id,
-        employee_name: user.employee_name,
-        role_name: user.employee_role_name,
-      }
-    }, { status: 200 });
-
-
-  } catch (error) {
-    console.error('ログインAPIでエラー発生！:', error);
     return NextResponse.json(
-      { message: 'サーバーでエラーが発生しました。' },
+      {
+        access_token: accessToken,
+        user: {
+          employee_id: user.employee_id,
+          employee_name: user.employee_name,
+          role_name: user.employee_role_name,
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('ログインAPI エラー:', error);
+    return NextResponse.json(
+      { message: 'サーバーエラーが発生しました。' },
       { status: 500 }
     );
   }
