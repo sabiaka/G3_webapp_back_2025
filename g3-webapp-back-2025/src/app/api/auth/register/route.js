@@ -1,72 +1,124 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db'; // PrismaとかDBに接続するやつ
+import db from '@/lib/db';
 import bcrypt from 'bcrypt';
 
-export async function GET(request) {
+// このエンドポイントは登録専用とし、GETは404を返す
+export async function GET() {
     return NextResponse.json(
-        { error: 'GETにAPIは対応していません。' },
+        { error: 'このエンドポイントはPOSTのみ対応です。' },
         { status: 404 }
     );
 }
 
+/*
+ * POST /api/auth/register
+ * 入力必須: employee_user_id, password, employee_name
+ * 任意    : employee_role_name (デフォルト: '一般'), employee_line_name (デフォルト: '未設定')
+ * 処理概要:
+ *  1. 入力バリデーション
+ *  2. ユーザーID重複チェック (SELECT)
+ *  3. パスワードハッシュ化 (bcrypt)
+ *  4. INSERT (db.query)  ※他APIと同じSQLスタイルに統一
+ *  5. 最小限の情報を返却（パスワードは含めない）
+ */
 export async function POST(request) {
     try {
-        // 1. フロントからユーザーIDとかパスワードを受け取る
         const body = await request.json();
-        const { employee_user_id, password, employee_name, employee_role_name, employee_line_name } = body;
+        const {
+            employee_user_id,
+            password,
+            employee_name,
+            employee_role_name,
+            employee_line_name,
+            // 備考 & カラーコード（/api/employees に合わせて別名も許容）
+            employee_special_notes,
+            employee_color_code,
+            special_notes,
+            color_code,
+        } = body || {};
 
-        // 最低限の情報が入ってなかったらエラー
         if (!employee_user_id || !password || !employee_name) {
             return NextResponse.json(
-                { error: '必要な情報が足りてないよ！' },
+                { message: '必須項目 (employee_user_id, password, employee_name) が不足しています。' },
                 { status: 400 }
             );
         }
 
-        // すでに同じユーザーIDの人がいないかチェック
-        const existingUser = await db.employees.findUnique({
-            where: { employee_user_id },
-        });
-
-        if (existingUser) {
+        // 重複チェック
+        const dupCheckSql = 'SELECT employee_user_id FROM employees WHERE employee_user_id = $1 LIMIT 1';
+        const dupResult = await db.query(dupCheckSql, [employee_user_id]);
+        if (dupResult.rows.length > 0) {
             return NextResponse.json(
-                { error: 'そのユーザーIDはもう使われてるよん' },
-                { status: 409 } // 409: 競合
+                { message: 'そのユーザーIDは既に使用されています。' },
+                { status: 409 }
             );
         }
 
-        // 2. ここが最重要！パスワードをハッシュ化する✨
-        // 10っていうのはセキュリティの強さ。このままでOK！
+        // パスワードハッシュ化（/api/employees のPOSTは平文だが、ここは安全性を優先）
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 3. DBに新しいユーザー情報を保存する
-        // 保存するのは、もちろんハッシュ化した後のパスワードね！
-        const newUser = await db.employees.create({
-            data: {
-                employee_user_id: employee_user_id,
-                employee_password: hashedPassword, // ← ハッシュ化したやつをIN！
-                employee_name: employee_name,
-                employee_role_name: employee_role_name || '一般', // 指定がなければ'一般'
-                employee_line_name: employee_line_name || '未設定', // 指定がなければ'未設定'
-                // 他のデータも必要に応じて追加してね
-            },
-        });
+        // 備考とカラーコードの入力統一（両方のキー形式をサポート）
+        let notesVal = employee_special_notes ?? special_notes ?? null;
+        let colorVal = employee_color_code ?? color_code ?? null;
 
-        // 4. 成功したことをフロントに伝える
-        // ※レスポンスにパスワードは絶対含めちゃダメだよ！
-        return NextResponse.json({
-            message: 'ユーザー登録大成功！',
-            user: {
-                employee_id: newUser.employee_id,
-                employee_user_id: newUser.employee_user_id,
-                employee_name: newUser.employee_name,
+        // カラーコード (#付き/無し 両対応) バリデーション
+        if (colorVal) {
+            // 先頭#を除去
+            if (colorVal.startsWith('#')) colorVal = colorVal.slice(1);
+            const hexRegex = /^[0-9a-fA-F]{6}$/;
+            if (!hexRegex.test(colorVal)) {
+                return NextResponse.json(
+                    { message: 'color_code は 6桁の16進数 (例: FF0000 または #FF0000) を指定してください。' },
+                    { status: 400 }
+                );
             }
-        }, { status: 201 }); // 201: 作成成功
+        }
 
-    } catch (error) {
-        console.error('ユーザー登録APIでエラー発生！:', error);
+        const insertSql = `
+            INSERT INTO employees (
+                employee_user_id,
+                employee_password,
+                employee_name,
+                employee_role_name,
+                employee_line_name,
+                employee_special_notes,
+                employee_color_code
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING employee_id, employee_user_id, employee_name, employee_special_notes, employee_color_code;
+        `;
+        const roleVal = employee_role_name || '一般';
+        const lineVal = employee_line_name || '未設定';
+        const insertParams = [
+            employee_user_id,
+            hashedPassword,
+            employee_name,
+            roleVal,
+            lineVal,
+            notesVal,
+            colorVal,
+        ];
+
+        const insertResult = await db.query(insertSql, insertParams);
+    const newUser = insertResult.rows[0];
+
         return NextResponse.json(
-            { message: 'サーバーでエラーが発生しました。' },
+            {
+                message: 'ユーザー登録成功',
+                user: newUser,
+            },
+            { status: 201 }
+        );
+    } catch (error) {
+        console.error('ユーザー登録API エラー:', error);
+        // ユニーク制約エラー (PostgreSQL エラーコード 23505) の場合
+        if (error.code === '23505') {
+            return NextResponse.json(
+                { message: 'そのユーザーIDは既に使用されています。(unique constraint)' },
+                { status: 409 }
+            );
+        }
+        return NextResponse.json(
+            { message: 'サーバーエラーが発生しました。' },
             { status: 500 }
         );
     }
