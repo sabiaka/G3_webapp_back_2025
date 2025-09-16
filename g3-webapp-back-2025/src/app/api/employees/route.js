@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcrypt';//bcryptライブラリインポート
 
+/*従業員データを取得するAPI (GET)*/
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -71,22 +72,7 @@ export async function GET(request) {
       special_notes: employee.employee_special_notes,
       color_code: employee.employee_color_code
     }));
-    
-    /*
-     * ===============================================================
-     * JSONデータの送信 (レスポンス)
-     * ===============================================================
-     * NextResponse.json() は、APIの処理結果をクライアントに返すための重要な関数です。
-     * ここでは、データベースから取得した従業員リスト (formattedEmployees) を
-     * JSON形式のデータに変換して、HTTPレスポンスのボディに設定しています。
-     * クライアント側（フロントエンドなど）は、このJSONデータを受け取って画面に表示するなどの処理を行います。
-     * * 内部的な動作:
-     * 1. JavaScriptのオブジェクトや配列 ({ employees: formattedEmployees }) を受け取る。
-     * 2. これをJSON文字列にシリアライズ（変換）する。
-     * 3. HTTPレスポンスのヘッダーに自動的に 'Content-Type: application/json' を設定する。
-     * 4. このレスポンスをクライアントに送信する。
-     * ===============================================================
-     */
+
     return NextResponse.json({ employees: formattedEmployees });
 
   } catch (error) {
@@ -98,23 +84,14 @@ export async function GET(request) {
   }
 }
 
-
-
-
-
-
-
-
-
-
-// POST関数からハッシュ化処理を削除
+/*新しい従業員を登録するAPI(POST)&パスワードをハッシュ化して保存するよう修正済み*/
 export async function POST(request) {
   try {
     const body = await request.json();
     const { 
       employee_name, 
       employee_user_id, 
-      password, // 平文のパスワード
+      password, 
       role_name: employee_role_name, 
       line_name: employee_line_name, 
       color_code, 
@@ -128,7 +105,8 @@ export async function POST(request) {
       );
     }
     
-    // const hashedPassword = await bcrypt.hash(password, 10); // ★この行を削除
+    // 平文のパスワードをハッシュ化
+    const hashedPassword = await bcrypt.hash(password, 10); 
 
     const query = `
       INSERT INTO employees (
@@ -147,7 +125,7 @@ export async function POST(request) {
     const values = [
       employee_name, 
       employee_user_id, 
-      password, // ★ハッシュ化せず、元のパスワードを直接使用
+      hashedPassword, // ハッシュ化したパスワードを保存
       employee_role_name, 
       employee_line_name, 
       color_code, 
