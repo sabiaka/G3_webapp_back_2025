@@ -20,7 +20,7 @@ export async function POST(request) {
 
     if (!employee_user_id || !password) {
       return NextResponse.json(
-        { error: 'employee_user_id と password は必須です。' },
+        { error: 'ユーザーID と パスワード は必須です。' },
         { status: 400 }
       );
     }
@@ -34,7 +34,7 @@ export async function POST(request) {
     const result = await db.query(selectSql, [employee_user_id]);
     if (result.rows.length === 0) {
       return NextResponse.json(
-        { error: 'Invalid user ID or password' },
+        { error: 'ユーザーID または パスワードが間違っています。' },
         { status: 401 }
       );
     }
@@ -42,7 +42,7 @@ export async function POST(request) {
 
     if (!user.employee_is_active) {
       return NextResponse.json(
-        { error: 'Invalid user ID or password' },
+        { error: 'ユーザーID または パスワードが間違っています。' },
         { status: 401 }
       );
     }
@@ -62,7 +62,7 @@ export async function POST(request) {
 
     if (!passwordOk) {
       return NextResponse.json(
-        { error: 'Invalid user ID or password' },
+        { error: 'ユーザーID または パスワードが間違っています。' },
         { status: 401 }
       );
     }
