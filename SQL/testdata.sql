@@ -53,12 +53,23 @@ INSERT INTO machines (machine_name) VALUES
 ('特殊加工機-α');
 
 -- machine_status (生産機械状況) テーブルへの仮データ挿入
-INSERT INTO machine_status (machine_id, machine_status, machine_trouble_info, machine_last_inspection) VALUES
-(1, '稼働中', NULL, '2025-07-01'),
-(2, '停止中', '定期メンテナンスのため停止。', '2025-07-20'),
-(3, '稼働中', NULL, '2025-06-15'),
-(4, '異常あり', 'センサーエラー（E-05）が発生。', '2025-05-10'),
-(5, 'メンテ中', '部品交換作業中。', '2025-07-22');
+INSERT INTO machine_status (
+  machine_id, status, machine_last_inspection
+)
+VALUES
+(1, '稼働中', '2025-07-01'),
+(2, '停止中', '2025-07-20'),
+(3, '稼働中', '2025-06-15'),
+(4, '異常あり', '2025-05-10'),
+(5, 'メンテ中', '2025-07-22');
+
+-- 【machine_logs（機械エラーログ履歴）】テスト用データ挿入
+INSERT INTO machine_logs (machine_id, log_type, title, message, timestamp)
+VALUES
+(1, 'error',   'E-102: トルク過負荷',           'モーターの負荷が規定値を超えました。', '2025-07-15 10:15:32'),
+(1, 'warning', 'W-05: 潤滑油低下',               '潤滑油が規定レベルを下回っています。', '2025-07-15 09:30:11'),
+(1, 'info',    'I-001: 起動シーケンス完了',       '',                                  '2025-07-15 08:00:05');
+
 
 -- inspection_results (検査画像) テーブルへの仮データ挿入
 INSERT INTO inspection_results (inspection_status, inspection_trouble_info, inspection_image_path) VALUES
