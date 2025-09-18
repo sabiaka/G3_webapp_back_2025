@@ -4,24 +4,21 @@ INSERT INTO roles (role_name) VALUES
 ('一般'),
 ('リーダー'),
 ('研修生'),
-('パートタイム');
+('スタッフ');
 
 -- production_lines (担当ライン) テーブルへの仮データ挿入
 INSERT INTO production_lines (line_name) VALUES
-('組立ラインA'),
-('塗装ラインB'),
-('検査ラインC'),
-('梱包ラインD'),
-('特殊ラインE');
+('組立'),
+('塗装'),
+('検査'),
+('梱包'),
+('特殊');
 
 -- employees (従業員) テーブルへの仮データ挿入
 -- パスワードは実際にはハッシュ化して保存してください
 INSERT INTO employees (employee_name, employee_user_id, employee_password, employee_is_active, employee_role_name, employee_line_name, employee_special_notes, employee_color_code) VALUES
-('山田 太郎', 'yamada.taro', 'password123', TRUE, 'リーダー', '組立', 'システム管理者。', 'FF5733'),
-('佐藤 花子', 'sato.hanako', 'password123', TRUE, 'サブリーダー', '組立', '組立担当。', '33CFFF'),
-('鈴木 一郎', 'suzuki.ichiro', 'password123', TRUE, '一般', '検査', '塗装ラインのリーダー。', 'DAF7A6'),
-('田中 美咲', 'tanaka.misaki', 'password123', TRUE, '一般', '検査', '検査部門の新人。', 'FFC300'),
-('伊藤 健太', 'ito.kenta', 'password123', TRUE, '一般', '検査', '梱包作業担当。', 'C70039');
+('山田 太郎', 't.yamada', 'password123', TRUE, 'リーダー', '組立', 'フォークリフト免許保持', 'a3a8e6'),
+('佐藤 花子', 'h.sato', 'password123', TRUE, 'スタッフ', '塗装', '色彩検定2級', 'e6a3c8');
 
 -- reports (日報) テーブルへの仮データ挿入
 INSERT INTO reports (report_employee_id, report_date, report_product_name, report_line_id, report_production_result, report_today_work, report_memo) VALUES
@@ -64,12 +61,11 @@ INSERT INTO machine_status (machine_id, machine_status, machine_trouble_info, ma
 (5, 'メンテ中', '部品交換作業中。', '2025-07-22');
 
 -- inspection_results (検査画像) テーブルへの仮データ挿入
-INSERT INTO inspection_results (inspection_image_path, inspection_status, inspection_trouble_info) VALUES
-('/images/inspection/20250724_001.jpg', '良品', NULL),
-('/images/inspection/20250724_002.jpg', '不良', '表面に傷あり。'),
-('/images/inspection/20250724_003.jpg', '良品', NULL),
-('/images/inspection/20250724_004.jpg', '良品', NULL),
-('/images/inspection/20250724_005.jpg', '不良', '異物混入の疑い。');
+INSERT INTO inspection_results (inspection_status, inspection_trouble_info, inspection_image_path) VALUES
+('PASS', NULL, '/images/inspection/20250901_01.jpg'),
+('FAIL', '位置ずれ', '/images/inspection/20250901_02.jpg');
+
+
 
 -- machine_production (ホックリング残数・生産数) テーブルへの仮データ挿入
 INSERT INTO machine_production (machine_prod_hook_remaining, machine_prod_count) VALUES
@@ -89,13 +85,14 @@ INSERT INTO production_reports (prodreport_date, prodreport_product_name, prodre
 
 
 
-
+--棚作成
 INSERT INTO racks (rack_name, rows, cols) VALUES
 ('スプリング・小物資材ラック', 3, 4);
 
-
-
--- rack_id=1 の棚 ('スプリング・小物資材ラック') に部品を追加します
+--上記rack_id=1('スプリング・小物資材ラック')に部品追加
 INSERT INTO slots (rack_id, slot_identifier, part_name, part_model_number, quantity, color_code) VALUES
 (1, 'A-1', 'ポケットコイル', 'PC-S-H20', 25, '#FF5733');
 
+--空スロット用
+INSERT INTO slots (rack_id, slot_identifier)VALUES
+(1, 'A-2');

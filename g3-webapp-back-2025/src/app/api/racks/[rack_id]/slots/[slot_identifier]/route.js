@@ -1,188 +1,190 @@
-//これ、[slot_identifier]内のroute.jsね。
-
 import { NextResponse } from 'next/server';
-import db from '@/lib/db';
-import bcrypt from 'bcrypt';
+import db from '@/lib/db'; // データベース接続
 
-export async function GET(request) {
+// =================================================================
+// POST: 新規格納 or 情報の上書き (Upsert)
+// =================================================================
+export async function POST(request, { params }) {
   try {
-    const { searchParams } = new URL(request.url);
-    const sort = searchParams.get('sort');
+    const { rack_id, slot_identifier } = params;
+    const { part_name, part_model_number, quantity, color_code } = await request.json();
 
-    const paramToColumnMap = {
-      'name_like': 'employee_name',
-      'is_active': 'employee_is_active',
-      'line_name': 'employee_line_name',
-    };
-
-    const filters = {};
-    for (const [param, column] of Object.entries(paramToColumnMap)) {
-      if (searchParams.has(param)) {
-        const value = searchParams.get(param);
-        if (value !== null && value !== '') {
-          filters[column] = value;
-        }
-      }
-    }
-
-    let query = `
-      SELECT
-        employee_id,
-        employee_name,
-        employee_user_id,
-        employee_is_active,
-        employee_role_name,
-        employee_line_name,
-        employee_special_notes,
-        employee_color_code
-      FROM employees
-    `;
-
-    const whereClauses = [];
-    const queryParams = [];
-    let paramIndex = 1;
-
-    for (const [key, value] of Object.entries(filters)) {
-      if (key === 'employee_name' || key === 'employee_special_notes') {
-        whereClauses.push(`${key} LIKE $${paramIndex++}`);
-        queryParams.push(`%${value}%`);
-      } else {
-        whereClauses.push(`${key} = $${paramIndex++}`);
-        queryParams.push(value);
-      }
-    }
-
-    if (whereClauses.length > 0) {
-      query += ` WHERE ${whereClauses.join(' AND ')}`;
-    }
-
-    if (sort === 'id_asc') {
-      query += ' ORDER BY employee_id ASC';
-    } else if (sort === 'id_desc') {
-      query += ' ORDER BY employee_id DESC';
-    }
-
-    const result = await db.query(query, queryParams);
-    const formattedEmployees = result.rows.map(employee => ({
-      employee_id: employee.employee_id,
-      employee_name: employee.employee_name,
-      employee_user_id: employee.employee_user_id,
-      is_active: employee.employee_is_active,
-      role_name: employee.employee_role_name,
-      line_name: employee.employee_line_name,
-      special_notes: employee.employee_special_notes,
-      color_code: employee.employee_color_code
-    }));
-    
-    /*
-     * ===============================================================
-     * JSONデータの送信 (レスポンス)
-     * ===============================================================
-     * NextResponse.json() は、APIの処理結果をクライアントに返すための重要な関数です。
-     * ここでは、データベースから取得した従業員リスト (formattedEmployees) を
-     * JSON形式のデータに変換して、HTTPレスポンスのボディに設定しています。
-     * クライアント側（フロントエンドなど）は、このJSONデータを受け取って画面に表示するなどの処理を行います。
-     * * 内部的な動作:
-     * 1. JavaScriptのオブジェクトや配列 ({ employees: formattedEmployees }) を受け取る。
-     * 2. これをJSON文字列にシリアライズ（変換）する。
-     * 3. HTTPレスポンスのヘッダーに自動的に 'Content-Type: application/json' を設定する。
-     * 4. このレスポンスをクライアントに送信する。
-     * ===============================================================
-     */
-    return NextResponse.json({ employees: formattedEmployees });
-
-  } catch (error) {
-    console.error('DBエラー発生！:', error);
-    return NextResponse.json(
-      { message: 'サーバーでエラーが発生しました。' },
-      { status: 500 }
-    );
-  }
-}
-
-
-
-
-
-
-
-
-
-
-// POST関数からハッシュ化処理を削除
-export async function POST(request) {
-  try {
-    const body = await request.json();
-    const { 
-      employee_name, 
-      employee_user_id, 
-      password, // 平文のパスワード
-      role_name: employee_role_name, 
-      line_name: employee_line_name, 
-      color_code, 
-      special_notes 
-    } = body;
-
-    if (!employee_name || !employee_user_id || !password || !employee_role_name || !employee_line_name) {
+    if (!part_name || !part_model_number || quantity === undefined || !color_code) {
       return NextResponse.json(
         { message: '必須項目が不足しています。' },
         { status: 400 }
       );
     }
-    
-    // const hashedPassword = await bcrypt.hash(password, 10); // ★この行を削除
 
     const query = `
-      INSERT INTO employees (
-        employee_name, 
-        employee_user_id, 
-        employee_password,
-        employee_role_name, 
-        employee_line_name, 
-        employee_color_code, 
-        employee_special_notes
-      ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO slots (
+        rack_id,
+        slot_identifier,
+        part_name,
+        part_model_number,
+        quantity,
+        color_code
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (rack_id, slot_identifier)
+      DO UPDATE SET
+        part_name = EXCLUDED.part_name,
+        part_model_number = EXCLUDED.part_model_number,
+        quantity = EXCLUDED.quantity,
+        color_code = EXCLUDED.color_code
       RETURNING *;
     `;
-    
-    const values = [
-      employee_name, 
-      employee_user_id, 
-      password, // ★ハッシュ化せず、元のパスワードを直接使用
-      employee_role_name, 
-      employee_line_name, 
-      color_code, 
-      special_notes
-    ];
-    
-    const result = await db.query(query, values);
-    const newEmployee = result.rows[0];
 
-    const formattedEmployee = {
-      employee_id: newEmployee.employee_id,
-      employee_name: newEmployee.employee_name,
-      employee_user_id: newEmployee.employee_user_id,
-      is_active: newEmployee.employee_is_active,
-      role_name: newEmployee.employee_role_name,
-      line_name: newEmployee.employee_line_name,
-      special_notes: newEmployee.employee_special_notes,
-      color_code: newEmployee.employee_color_code,
+    const values = [
+      rack_id,
+      slot_identifier,
+      part_name,
+      part_model_number,
+      quantity,
+      color_code,
+    ];
+
+    const result = await db.query(query, values);
+    
+    const upsertedSlot = result.rows[0];
+    const responseData = {
+      message: `スロット ${upsertedSlot.slot_identifier} の部品情報を更新しました。`,
+      slot: {
+        slot_identifier: upsertedSlot.slot_identifier,
+        part_name: upsertedSlot.part_name,
+        part_model_number: upsertedSlot.part_model_number,
+        quantity: upsertedSlot.quantity,
+        color_code: upsertedSlot.color_code,
+      }
     };
 
-    return NextResponse.json(formattedEmployee, { status: 201 });
+    return NextResponse.json(responseData, { status: 200 });
 
   } catch (error) {
-    console.error('DBエラー発生！:', error);
-    if (error.code === '23505') {
-        return NextResponse.json(
-          { message: '指定されたemployee_user_idは既に使用されています。' },
-          { status: 409 }
-        );
+    if (error.code === '23503') {
+      return NextResponse.json(
+        { message: '指定された棚（rack_id）が存在しません。' },
+        { status: 404 }
+      );
     }
+    console.error('API (POST) エラー:', error);
     return NextResponse.json(
-      { message: 'サーバーでエラーが発生しました。' },
+      { message: 'サーバー内部でエラーが発生しました。' },
       { status: 500 }
     );
   }
 }
+
+// =================================================================
+// PUT: 既存の部品情報の編集 (Update)
+// =================================================================
+export async function PUT(request, { params }) {
+  try {
+    const { rack_id, slot_identifier } = params;
+    const { part_name, part_model_number, quantity, color_code } = await request.json();
+
+    if (!part_name || !part_model_number || quantity === undefined || !color_code) {
+      return NextResponse.json(
+        { message: '必須項目が不足しています。' },
+        { status: 400 }
+      );
+    }
+
+    const query = `
+      UPDATE slots
+      SET
+        part_name = $1,
+        part_model_number = $2,
+        quantity = $3,
+        color_code = $4
+      WHERE
+        rack_id = $5 AND slot_identifier = $6
+      RETURNING *;
+    `;
+
+    const values = [
+      part_name,
+      part_model_number,
+      quantity,
+      color_code,
+      rack_id,
+      slot_identifier
+    ];
+
+    const result = await db.query(query, values);
+
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { message: '編集対象の棚またはスロットが見つかりません。' },
+        { status: 404 }
+      );
+    }
+
+    const updatedSlot = result.rows[0];
+    const responseData = {
+      message: `${updatedSlot.slot_identifier}の部品情報を更新しました。`,
+      slot: {
+        slot_identifier: updatedSlot.slot_identifier,
+        part_name: updatedSlot.part_name,
+        part_model_number: updatedSlot.part_model_number,
+        quantity: updatedSlot.quantity,
+        color_code: updatedSlot.color_code,
+      }
+    };
+    return NextResponse.json(responseData, { status: 200 });
+  } catch (error) {
+    console.error('API (PUT) エラー:', error);
+    return NextResponse.json(
+      { message: 'サーバー内部でエラーが発生しました。' },
+      { status: 500 }
+    );
+  }
+}
+
+// =================================================================
+// DELETE: スロットの部品情報を空にする (NULLでUPDATE)
+// =================================================================
+export async function DELETE(request, { params }) {
+  try {
+    // 1. URLからどのスロットかを特定
+    const { rack_id, slot_identifier } = params;
+
+    // 2. 部品情報をNULLで更新してスロットを空にするSQLクエリ
+    const query = `
+      UPDATE slots
+      SET
+        part_name = NULL,
+        part_model_number = NULL,
+        quantity = NULL,
+        color_code = NULL
+      WHERE
+        rack_id = $1 AND slot_identifier = $2;
+    `;
+    const values = [rack_id, slot_identifier];
+
+    // 3. SQLクエリを実行
+    const result = await db.query(query, values);
+
+    // 4. 削除（空にする）対象のスロットが見つからなかった場合
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { message: '削除対象の棚またはスロットが見つかりません。' },
+        { status: 404 } // Not Found
+      );
+    }
+
+    // 5. 仕様書通りの成功レスポンスを返却
+    return NextResponse.json(
+      { message: `${slot_identifier}の部品を削除しました。` },
+      { status: 200 } // OK
+    );
+
+  } catch (error) {
+    console.error('API (DELETE) エラー:', error);
+    return NextResponse.json(
+      { message: 'サーバー内部でエラーが発生しました。' },
+      { status: 500 }
+    );
+  }
+}
+
