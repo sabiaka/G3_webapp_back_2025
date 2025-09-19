@@ -4,24 +4,21 @@ INSERT INTO roles (role_name) VALUES
 ('一般'),
 ('リーダー'),
 ('研修生'),
-('パートタイム');
+('スタッフ');
 
 -- production_lines (担当ライン) テーブルへの仮データ挿入
 INSERT INTO production_lines (line_name) VALUES
-('組立ラインA'),
-('塗装ラインB'),
-('検査ラインC'),
-('梱包ラインD'),
-('特殊ラインE');
+('組立'),
+('塗装'),
+('検査'),
+('梱包'),
+('特殊');
 
 -- employees (従業員) テーブルへの仮データ挿入
 -- パスワードは実際にはハッシュ化して保存してください
 INSERT INTO employees (employee_name, employee_user_id, employee_password, employee_is_active, employee_role_name, employee_line_name, employee_special_notes, employee_color_code) VALUES
-('山田 太郎', 'yamada.taro', 'password123', TRUE, 'リーダー', '組立', 'システム管理者。', 'FF5733'),
-('佐藤 花子', 'sato.hanako', 'password123', TRUE, 'サブリーダー', '組立', '組立担当。', '33CFFF'),
-('鈴木 一郎', 'suzuki.ichiro', 'password123', TRUE, '一般', '検査', '塗装ラインのリーダー。', 'DAF7A6'),
-('田中 美咲', 'tanaka.misaki', 'password123', TRUE, '一般', '検査', '検査部門の新人。', 'FFC300'),
-('伊藤 健太', 'ito.kenta', 'password123', TRUE, '一般', '検査', '梱包作業担当。', 'C70039');
+('山田 太郎', 't.yamada', 'password123', TRUE, 'リーダー', '組立', 'フォークリフト免許保持', 'a3a8e6'),
+('佐藤 花子', 'h.sato', 'password123', TRUE, 'スタッフ', '塗装', '色彩検定2級', 'e6a3c8');
 
 -- reports (日報) テーブルへの仮データ挿入
 INSERT INTO reports (report_employee_id, report_date, report_product_name, report_line_id, report_production_result, report_today_work, report_memo) VALUES
@@ -56,12 +53,23 @@ INSERT INTO machines (machine_name) VALUES
 ('特殊加工機-α');
 
 -- machine_status (生産機械状況) テーブルへの仮データ挿入
-INSERT INTO machine_status (machine_id, machine_status, machine_trouble_info, machine_last_inspection) VALUES
-(1, '稼働中', NULL, '2025-07-01'),
-(2, '停止中', '定期メンテナンスのため停止。', '2025-07-20'),
-(3, '稼働中', NULL, '2025-06-15'),
-(4, '異常あり', 'センサーエラー（E-05）が発生。', '2025-05-10'),
-(5, 'メンテ中', '部品交換作業中。', '2025-07-22');
+INSERT INTO machine_status (
+  machine_id, status, machine_last_inspection
+)
+VALUES
+(1, '稼働中', '2025-07-01'),
+(2, '停止中', '2025-07-20'),
+(3, '稼働中', '2025-06-15'),
+(4, '異常あり', '2025-05-10'),
+(5, 'メンテ中', '2025-07-22');
+
+-- 【machine_logs（機械エラーログ履歴）】テスト用データ挿入
+INSERT INTO machine_logs (machine_id, log_type, title, message, timestamp)
+VALUES
+(1, 'error',   'E-102: トルク過負荷',           'モーターの負荷が規定値を超えました。', '2025-07-15 10:15:32'),
+(1, 'warning', 'W-05: 潤滑油低下',               '潤滑油が規定レベルを下回っています。', '2025-07-15 09:30:11'),
+(1, 'info',    'I-001: 起動シーケンス完了',       '',                                  '2025-07-15 08:00:05');
+
 
 -- inspection_results (検査画像) テーブルへの仮データ挿入
 INSERT INTO inspection_results (inspection_status, inspection_trouble_info, inspection_image_path) VALUES
