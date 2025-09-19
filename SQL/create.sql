@@ -73,12 +73,24 @@ CREATE TABLE machines (
 
 -- 【Machine Status(生産機械状況)】
 CREATE TABLE machine_status (
-    machine_status_id SERIAL PRIMARY KEY,      -- 状態ID（自動採番）
-    machine_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 状態記録日時
-    machine_id INT NOT NULL,                   -- 機械ID（machinesテーブルの外部キー）
-    machine_status VARCHAR(20) NOT NULL CHECK (machine_status IN ('稼働中', '停止中', '異常あり', 'メンテ中')), -- 状態を限定
-    machine_trouble_info TEXT,                 -- 不具合情報
-    machine_last_inspection DATE,              -- 最終点検日
+    machine_status_id SERIAL PRIMARY KEY,
+    machine_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    machine_id INT NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('稼働中','停止中','異常あり','メンテ中')),
+    today_uptime_seconds INT DEFAULT 0,
+    today_production_count INT DEFAULT 0,
+    machine_last_inspection DATE,
+    next_inspection_date DATE
+    --FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+);
+-- 【Machine Logs（機械エラーログ履歴）】
+CREATE TABLE machine_logs (
+    log_id SERIAL PRIMARY KEY,
+    machine_id INT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    log_type VARCHAR(10) CHECK (log_type IN ('error','warning','info')),
+    title VARCHAR(100) NOT NULL,
+    message TEXT,
     FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
 );
 
