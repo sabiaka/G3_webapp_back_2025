@@ -18,7 +18,8 @@ export async function GET(request, { params }) {
     let index = 2;
 
     if (date) {
-      whereClauses.push(`DATE(timestamp) = $${index++}`);
+      // JST基準で日付比較（Asia/Tokyo）
+      whereClauses.push(`(timestamp AT TIME ZONE 'Asia/Tokyo')::date = $${index++}`);
       values.push(date);
     }
 
