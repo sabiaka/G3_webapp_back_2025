@@ -15,40 +15,46 @@ export async function POST(request) {
       to_slot_identifier
     } = await request.json();
 
+    // 必須項目のバリデーション
     if (!from_rack_id || !from_slot_identifier || !to_rack_id || !to_slot_identifier) {
       return NextResponse.json({ message: '必須項目が不足しています。' }, { status: 400 });
     }
+    // 移動元と移動先が同じでないかチェック
     if (from_rack_id === to_rack_id && from_slot_identifier === to_slot_identifier) {
       return NextResponse.json({ message: '移動元と移動先を同じにすることはできません。' }, { status: 400 });
     }
     
+    // トランザクション開始
     await db.query('BEGIN');
 
-    // 移動元のスロット情報を取得
+    // 1. 移動元のスロット情報を取得
     const fromSlotQuery = `
       SELECT part_name, part_model_number, quantity, color_code
       FROM slots WHERE rack_id = $1 AND slot_identifier = $2;
     `;
     const fromSlotResult = await db.query(fromSlotQuery, [from_rack_id, from_slot_identifier]);
 
-    if (fromSlotResult.rowCount === 0) throw new Error('移動元のスロットが見つかりません。');
-    if (!fromSlotResult.rows[0].part_name) throw new Error('移動元のスロットは空です。');
+    // 移動元スロットの存在と中身をチェック
+    if (fromSlotResult.rowCount === 0) {
+      throw new Error('移動元のスロットが見つかりません。');
+    }
+    if (!fromSlotResult.rows[0].part_name) {
+      throw new Error('移動元のスロットは空です。');
+    }
     const partToMove = fromSlotResult.rows[0];
 
-    // ▼▼▼ ここからが修正箇所 ▼▼▼
-
-    // 移動先スロットの状態を確認
+    // 2. 移動先スロットの状態を確認
     const toSlotQuery = `SELECT part_name FROM slots WHERE rack_id = $1 AND slot_identifier = $2;`;
     const toSlotResult = await db.query(toSlotQuery, [to_rack_id, to_slot_identifier]);
 
-    // 移動先が存在し、かつ空ではない場合はエラー
+    // 移動先に既に部品がある場合はエラー
     if (toSlotResult.rowCount > 0 && toSlotResult.rows[0].part_name) {
       throw new Error('移動先のスロットには既に別の部品があります。');
     }
 
-    // 移動先スロットが存在するかどうかに応じて、INSERTかUPDATEかを切り替える
+    // 3. 移動先のデータを更新または挿入
     if (toSlotResult.rowCount > 0) {
-      // --- ケース1: 移動先が存在する場合 (空なのでUPDATE) ---
+      // ケース1: 移動先スロットが存在する場合 (空なのでUPDATE)
       const updateToSlotQuery = `
         UPDATE slots SET part_name = $1, part_model_number = $2, quantity = $3, color_code = $4
         WHERE rack_id = $5 AND slot_identifier = $6;
@@ -58,8 +64,7 @@ export async function POST(request) {
         to_rack_id, to_slot_identifier
       ]);
     } else {
-      // --- ケース2: 移動先が存在しない場合 (新しい行をINSERT) ---
-      // rack_idが存在しない場合はFOREIGN KEY制約違反となり、catchブロックで処理される
+      // ケース2: 移動先スロットが存在しない場合 (新しい行をINSERT)
       const insertToSlotQuery = `
         INSERT INTO slots (rack_id, slot_identifier, part_name, part_model_number, quantity, color_code)
         VALUES ($1, $2, $3, $4, $5, $6);
@@ -70,34 +75,44 @@ export async function POST(request) {
       ]);
     }
 
-    // ▲▲▲ 修正箇所ここまで ▲▲▲
-
-    // 移動元の情報を削除（空にする）
-    const clearFromSlotQuery = `
-      UPDATE slots SET part_name = NULL, part_model_number = NULL, quantity = NULL, color_code = NULL
+    // 4. 移動元のスロットを完全に削除
+    const deleteFromSlotQuery = `
+      DELETE FROM slots
       WHERE rack_id = $1 AND slot_identifier = $2;
     `;
-    await db.query(clearFromSlotQuery, [from_rack_id, from_slot_identifier]);
-
+    await db.query(deleteFromSlotQuery, [from_rack_id, from_slot_identifier]);
+    
+    // トランザクションをコミット
     await db.query('COMMIT');
 
+    // 5. 成功レスポンスを返す
     return NextResponse.json({
       message: `部品を ${from_slot_identifier} から ${to_slot_identifier} へ移動しました。`
     }, { status: 200 });
 
   } catch (error) {
+    // エラーが発生した場合はロールバック
     await db.query('ROLLBACK');
     console.error('API (Move) エラー:', error.message);
     
+    let message = 'サーバー内部でエラーが発生しました。';
     let status = 500;
+    
     // FOREIGN KEY制約違反（存在しない棚ID）の場合
     if (error.code === '23503') {
-        return NextResponse.json({ message: '移動先の棚（rack_id）が存在しません。' }, { status: 404 });
+        message = '移動先の棚（rack_id）が存在しません。';
+        status = 404;
     }
-    if (error.message.includes('見つかりません')) status = 404;
-    else if (error.message.includes('空です') || error.message.includes('既に別の部品があります')) status = 409;
+    // エラーメッセージに応じてステータスコードを振り分ける
+    else if (error.message.includes('見つかりません')) {
+      message = error.message;
+      status = 404;
+    }
+    else if (error.message.includes('空です') || error.message.includes('既に別の部品があります')) {
+      message = error.message;
+      status = 409; // Conflict
+    }
     
-    return NextResponse.json({ message: error.message || 'サーバー内部でエラーが発生しました。' }, { status: status });
+    return NextResponse.json({ message: message }, { status: status });
   }
 }
-
