@@ -154,26 +154,22 @@ export async function PUT(request, { params }) {
 }
 
 // =================================================================
-// DELETE: スロットの部品情報を空にする (NULLでUPDATE)
+// DELETE: スロットの行を完全に削除
 // =================================================================
 export async function DELETE(request, { params }) {
   try {
     const { rack_id, slot_identifier } = params;
 
+    // ★ UPDATE文をDELETE文に変更
     const query = `
-      UPDATE slots
-      SET
-        part_name = NULL,
-        part_model_number = NULL,
-        quantity = NULL,
-        color_code = NULL
-      WHERE
-        rack_id = $1 AND slot_identifier = $2;
+      DELETE FROM slots
+      WHERE rack_id = $1 AND slot_identifier = $2;
     `;
     const values = [rack_id, slot_identifier];
 
     const result = await db.query(query, values);
 
+    // 削除対象が見つからなかった場合
     if (result.rowCount === 0) {
       return NextResponse.json(
         { message: '削除対象の棚またはスロットが見つかりません。' },
@@ -181,8 +177,9 @@ export async function DELETE(request, { params }) {
       );
     }
 
+    // 成功レスポンスを返却
     return NextResponse.json(
-      { message: `${slot_identifier}の部品を削除しました。` },
+      { message: `スロット ${slot_identifier} を削除しました。` },
       { status: 200 }
     );
 
