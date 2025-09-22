@@ -9,24 +9,29 @@
 \set ON_ERROR_STOP on
 SET client_min_messages TO WARNING;
 
-\echo '== 1) ロール(nakamura)の作成/更新'
+\echo '== 0) 既存DBセッション終了とDB/ロールの破棄(存在すれば)'
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_roles WHERE rolname = 'nakamura'
-  ) THEN
-    -- ログイン可能なユーザー作成
-    CREATE ROLE nakamura LOGIN PASSWORD 'g3';
-  ELSE
-    -- 既存の場合はパスワード等を更新
-    ALTER ROLE nakamura WITH LOGIN PASSWORD 'g3';
+  -- 既存の g3db がある場合は接続セッションを切断
+  IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'g3db') THEN
+    PERFORM pg_terminate_backend(pid)
+    FROM pg_stat_activity
+    WHERE datname = 'g3db'
+      AND pid <> pg_backend_pid();
   END IF;
 END $$;
 
-\echo '== 2) データベース(g3db)の作成 (存在しなければ)'
--- CREATE DATABASE はトランザクション外で実行する必要があるため、\gexec を使用
-SELECT 'CREATE DATABASE g3db OWNER nakamura TEMPLATE template0 ENCODING ''UTF8''' 
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'g3db')\gexec
+-- 既存のDB/ロールを削除（無ければ無視）
+DROP DATABASE IF EXISTS g3db;
+DROP ROLE IF EXISTS nakamura;
+
+\echo '== 1) ロール(nakamura)の新規作成(真っ白)'
+-- 必要最小限のログインユーザーとして作成（SUPERUSER等は付与しない）
+CREATE ROLE nakamura LOGIN PASSWORD 'g3';
+
+\echo '== 2) データベース(g3db)の新規作成(真っ白)'
+-- CREATE DATABASE はトランザクション外コマンド
+CREATE DATABASE g3db OWNER nakamura TEMPLATE template0 ENCODING 'UTF8';
 
 \echo '== 3) データベースの基本設定(タイムゾーン)'
 ALTER DATABASE g3db SET timezone TO 'Asia/Tokyo';

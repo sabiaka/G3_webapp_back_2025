@@ -42,6 +42,39 @@ sudo -u postgres psql -f SQL/setup_for_ubuntu.sql
 - `public` スキーマの所有者/権限を `nakamura` に設定
 - `SQL/create.sql`（スキーマ）と `SQL/testdata.sql`（サンプルデータ）を適用
 
+### (任意) OS の Linux ユーザーも作成する場合
+`pg_hba.conf` を `peer` 認証にする運用や、サービス実行ユーザーを作っておきたい場合は、OS の `nakamura` ユーザーも作成しておくと便利です。
+
+```bash
+# UID/GID 自動採番、ホームディレクトリ付きで作成
+sudo adduser --disabled-password --gecos "" nakamura
+
+# 必要に応じてパスワードを設定（DBのパスワードとは別物）
+# 例1) 対話的に設定（推奨）
+sudo passwd nakamura
+
+# サービス実行ユーザーとして使う場合、sudo 付与は慎重に検討
+# sudo usermod -aG sudo nakamura
+```
+
+OSユーザーを作成した場合、`pg_hba.conf` を `peer`/`ident` などへ切り替えると、OSユーザー=DBユーザーの紐付けでパスワード無し接続も可能です（セキュリティ/運用方針に合わせて設定してください）。
+
+#### 品質チェックを回避して OS パスワードを『g3』に固定する
+開発用途などでどうしても弱いパスワードを設定したい場合は、`pam_pwquality` の辞書チェックを通さずに暗号化済みパスワードを直接適用します。
+
+```bash
+# OpenSSL が未インストールなら導入
+sudo apt update && sudo apt install -y openssl
+
+# 'g3' を SHA-512 でハッシュ化して環境変数に格納
+HASH=$(openssl passwd -6 'g3')
+
+# 暗号化済み(-e)として chpasswd に適用（品質チェックを回避）
+echo "nakamura:$HASH" | sudo chpasswd -e
+```
+
+注意: セキュリティ上は非推奨です。本番やインターネットに露出する環境では使用しないでください。
+
 ## 4. リモート接続の許可（必要な場合）
 
 LAN など他ホストから接続したい場合は PostgreSQL サーバ設定を変更します。
