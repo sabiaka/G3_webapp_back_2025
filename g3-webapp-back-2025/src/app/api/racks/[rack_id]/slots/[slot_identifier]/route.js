@@ -7,9 +7,15 @@ import db from '@/lib/db'; // データベース接続
 export async function POST(request, { params }) {
   try {
     const { rack_id, slot_identifier } = params;
-    const { part_name, part_model_number, quantity, color_code } = await request.json();
+    // ★ リクエストボディを一度変数で受け取る
+    const body = await request.json();
 
-    if (!part_name || !part_model_number || quantity === undefined || !color_code) {
+    // ★ part_model_number がない、または空文字列の場合は null を設定
+    const { part_name, quantity, color_code } = body;
+    const part_model_number = body.part_model_number || null;
+
+    // ★ バリデーションから part_model_number のチェックを削除
+    if (!part_name || quantity === undefined || !color_code) {
       return NextResponse.json(
         { message: '必須項目が不足しています。' },
         { status: 400 }
@@ -39,7 +45,7 @@ export async function POST(request, { params }) {
       rack_id,
       slot_identifier,
       part_name,
-      part_model_number,
+      part_model_number, // ★ null許容になった変数を渡す
       quantity,
       color_code,
     ];
@@ -81,9 +87,15 @@ export async function POST(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     const { rack_id, slot_identifier } = params;
-    const { part_name, part_model_number, quantity, color_code } = await request.json();
+    // ★ リクエストボディを一度変数で受け取る
+    const body = await request.json();
+    
+    // ★ part_model_number がない、または空文字列の場合は null を設定
+    const { part_name, quantity, color_code } = body;
+    const part_model_number = body.part_model_number || null;
 
-    if (!part_name || !part_model_number || quantity === undefined || !color_code) {
+    // ★ バリデーションから part_model_number のチェックを削除
+    if (!part_name || quantity === undefined || !color_code) {
       return NextResponse.json(
         { message: '必須項目が不足しています。' },
         { status: 400 }
@@ -104,7 +116,7 @@ export async function PUT(request, { params }) {
 
     const values = [
       part_name,
-      part_model_number,
+      part_model_number, // ★ null許容になった変数を渡す
       quantity,
       color_code,
       rack_id,
@@ -146,10 +158,8 @@ export async function PUT(request, { params }) {
 // =================================================================
 export async function DELETE(request, { params }) {
   try {
-    // 1. URLからどのスロットかを特定
     const { rack_id, slot_identifier } = params;
 
-    // 2. 部品情報をNULLで更新してスロットを空にするSQLクエリ
     const query = `
       UPDATE slots
       SET
@@ -162,21 +172,18 @@ export async function DELETE(request, { params }) {
     `;
     const values = [rack_id, slot_identifier];
 
-    // 3. SQLクエリを実行
     const result = await db.query(query, values);
 
-    // 4. 削除（空にする）対象のスロットが見つからなかった場合
     if (result.rowCount === 0) {
       return NextResponse.json(
         { message: '削除対象の棚またはスロットが見つかりません。' },
-        { status: 404 } // Not Found
+        { status: 404 }
       );
     }
 
-    // 5. 仕様書通りの成功レスポンスを返却
     return NextResponse.json(
       { message: `${slot_identifier}の部品を削除しました。` },
-      { status: 200 } // OK
+      { status: 200 }
     );
 
   } catch (error) {
@@ -187,4 +194,3 @@ export async function DELETE(request, { params }) {
     );
   }
 }
-

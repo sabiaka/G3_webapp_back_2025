@@ -86,13 +86,13 @@ CREATE TABLE machine_status (
 --【画像検査テーブル】
 CREATE TABLE inspection_results (
     inspection_id SERIAL PRIMARY KEY,                                   -- 自動採番
-    inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 撮影日時
-    inspection_inspected_time TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, -- 検査日時
     inspection_camera_id VARCHAR(50) NOT NULL,                          -- カメラ名
     inspection_product_id VARCHAR(50) NOT NULL,                         -- 製品名
     inspection_result VARCHAR(50) NULL,                                 -- 検査結果（良品、不良など）
     inspection_reason TEXT NULL,                                        -- 問題点詳細
-    inspection_image_path TEXT NOT NULL                                 -- 検査画像パス
+    inspection_image_path TEXT NOT NULL,                                -- 検査画像パス
+    inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 撮影日時
+    inspection_inspected_time TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP -- 検査日時
 );
 
 --【ホックリング残数・生産数テーブル】
