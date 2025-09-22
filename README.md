@@ -35,6 +35,21 @@ yarn dev
 
 ブラウザで http://localhost:3000 を開きます。
 
+### 事前に必要な環境変数（JWT_SECRET）
+
+認証トークン発行に `JWT_SECRET` が必要です。開発環境では `.env.local` を作成してください（Next.js が自動で読み込みます）。
+
+```
+# g3-webapp-back-2025/.env.local
+JWT_SECRET=dev_change_me_please_1f6f9f5f7d2a4b0c9e3a1c6d8f2b4a6c
+```
+
+Windows PowerShell の一時設定でも可:
+
+```powershell
+$env:JWT_SECRET="dev_my_secret_123"; npm run dev
+```
+
 ### ポートを変更したい場合
 
 - 一時的にポートを指定（dev）
@@ -77,26 +92,39 @@ yarn start
 
 ## データベース設定（PostgreSQL）
 
-接続設定は `g3-webapp-back-2025/src/lib/db.js` にハードコードされています。
-既定値:
+接続先は `g3-webapp-back-2025/src/lib/db.js` がサーバのIPアドレスから自動判別します。
+
+- サーバIPが `192.168.x.x` の場合 → `host: 192.168.0.20`
+- サーバIPが `10.x.x.x` の場合 → `host: 10.100.54.170`
+
+既定の認証情報:
     - user: `nakamura`
-    - host: `10.100.54.170`
     - database: `g3db`
     - password: `g3`
     - port: `5432`
 
-必要に応じて `src/lib/db.js` を編集してください。
+必要に応じて `src/lib/db.js` を編集して接続ポリシーや認証情報を変更できます。
+
+Ubuntu に新規で DB 環境を構築する場合は、以下のガイド/スクリプトを利用してください:
+- セットアップガイド: `SQL/setup_for_ubuntu.md`
+- 一括セットアップSQL: `SQL/setup_for_ubuntu.sql`
 
 ### 初期データ投入（任意）
 
-リポジトリ直下の `SQL/` にスキーマやテストデータがあります。`psql` が利用可能な環境で以下のように実行できます。
+`SQL/` にスキーマ・テストデータがあります。`psql` が利用可能な環境で以下のように実行できます（接続先は環境に合わせて変更）。
 
 ```powershell
 # スキーマ作成
-psql -h 10.100.54.170 -U nakamura -d g3db -f .\SQL\create.sql
+psql -h 192.168.0.20 -U nakamura -d g3db -f .\SQL\create.sql
 
 # テストデータ投入
-psql -h 10.100.54.170 -U nakamura -d g3db -f .\SQL\testdata.sql
+psql -h 192.168.0.20 -U nakamura -d g3db -f .\SQL\testdata.sql
+```
+
+Ubuntu では、次の一括セットアップでユーザー/DB作成からスキーマ適用まで自動化できます。
+
+```bash
+sudo -u postgres psql -f SQL/setup_for_ubuntu.sql
 ```
 
 注意: ネットワークや権限で接続できない場合があります。その際は、DB 管理者へ接続情報（ホスト・ポート・DB名・ユーザー・パスワード）の確認を行ってください。
@@ -118,8 +146,8 @@ G3_webapp_back_2025/
 
 ## その他
 
-- `.env` ファイルを作成して環境変数を設定できます。
-- 詳細は各ディレクトリの README やコメントを参照してください。
+- 環境変数は `.env.local`（開発用）を推奨します。本番ではホスト側の環境変数機能等で安全に設定してください。
+- 詳細は各ディレクトリの README やコメント、`SQL/setup_for_ubuntu.md` を参照してください。
 
 ## ライセンス
 
