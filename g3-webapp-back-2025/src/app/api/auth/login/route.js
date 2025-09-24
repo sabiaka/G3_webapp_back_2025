@@ -2,6 +2,53 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * JWT_SECRETを自動生成し、.envファイルに保存する関数
+ */
+function generateAndSaveJwtSecret() {
+  try {
+    // 64バイトのランダムな文字列を生成（base64エンコード）
+    const jwtSecret = crypto.randomBytes(64).toString('base64');
+    
+    // プロジェクトルートの.envファイルのパス
+    const envPath = path.join(process.cwd(), '.env');
+    
+    let envContent = '';
+    
+    // 既存の.envファイルがあれば読み込む
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+      
+      // JWT_SECRETが既に存在するかチェック
+      if (envContent.includes('JWT_SECRET=')) {
+        // 既存のJWT_SECRETを更新
+        envContent = envContent.replace(/JWT_SECRET=.*$/m, `JWT_SECRET=${jwtSecret}`);
+      } else {
+        // JWT_SECRETを追加
+        envContent += `\nJWT_SECRET=${jwtSecret}\n`;
+      }
+    } else {
+      // 新規.envファイルを作成
+      envContent = `JWT_SECRET=${jwtSecret}\n`;
+    }
+    
+    // .envファイルに書き込み
+    fs.writeFileSync(envPath, envContent);
+    
+    // 環境変数を更新（現在のプロセスで即座に利用可能にする）
+    process.env.JWT_SECRET = jwtSecret;
+    
+    console.log('JWT_SECRETを自動生成し、.envファイルに保存しました。');
+    return jwtSecret;
+  } catch (error) {
+    console.error('JWT_SECRET生成エラー:', error);
+    throw new Error('JWT_SECRETの自動生成に失敗しました。');
+  }
+}
 
 /*
  * POST /api/auth/login
@@ -67,11 +114,18 @@ export async function POST(request) {
       );
     }
 
+    // JWT_SECRETが未設定の場合は自動生成
     if (!process.env.JWT_SECRET) {
-      return NextResponse.json(
-        { error: 'JWT_SECRET 未設定のためトークンを生成できません。' },
-        { status: 500 }
-      );
+      try {
+        generateAndSaveJwtSecret();
+        console.log('JWT_SECRETが未設定だったため、自動生成しました。');
+      } catch (generateError) {
+        console.error('JWT_SECRET自動生成エラー:', generateError);
+        return NextResponse.json(
+          { error: 'JWT_SECRETの自動生成に失敗しました。' },
+          { status: 500 }
+        );
+      }
     }
 
     const tokenPayload = {
