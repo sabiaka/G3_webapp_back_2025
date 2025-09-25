@@ -9,8 +9,10 @@ function rowLabels(n) {
   return labels;
 }
 
-export async function GET(req, { params }) {
-  const rackId = Number(params.rack_id);
+export async function GET(req, ctx) {
+  // Next.js 15 以降 params は Promise になるため await が必要
+  const { rack_id } = await ctx.params;
+  const rackId = Number(rack_id);
   if (!Number.isInteger(rackId)) {
     return NextResponse.json({ error: 'Invalid rack_id' }, { status: 400 });
   }
@@ -68,8 +70,9 @@ export async function GET(req, { params }) {
 }
 
 // 1マス更新/登録（任意）: PATCH /api/racks/{rack_id}
-export async function PATCH(req, { params }) {
-  const rackId = Number(params.rack_id);
+export async function PATCH(req, ctx) {
+  const { rack_id } = await ctx.params;
+  const rackId = Number(rack_id);
   if (!Number.isInteger(rackId)) {
     return NextResponse.json({ error: 'Invalid rack_id' }, { status: 400 });
   }
@@ -104,8 +107,9 @@ export async function PATCH(req, { params }) {
 }
 
 // ★ 追加: ラック削除 DELETE /api/racks/{rack_id}
-export async function DELETE(req, { params }) {
-  const rackId = Number(params.rack_id);
+export async function DELETE(req, ctx) {
+  const { rack_id } = await ctx.params;
+  const rackId = Number(rack_id);
   if (!Number.isInteger(rackId)) {
     return NextResponse.json({ error: 'Invalid rack_id' }, { status: 400 });
   }

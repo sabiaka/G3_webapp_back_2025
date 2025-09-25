@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db"; // ← あなたのDB接続設定に合わせて変更
+import db from "@/lib/db"; // DB接続
 
-export async function GET(request, { params }) {
-  const { id } = params;
+export async function GET(request, ctx) {
+  // Next.js 15+: params は Promise
+  const { id } = await ctx.params;
 
   try {
     const result = await db.query(

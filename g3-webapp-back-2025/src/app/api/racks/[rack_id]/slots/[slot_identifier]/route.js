@@ -4,9 +4,9 @@ import db from '@/lib/db'; // データベース接続
 // =================================================================
 // POST: 新規格納 or 情報の上書き (Upsert)
 // =================================================================
-export async function POST(request, { params }) {
+export async function POST(request, ctx) {
+  const { rack_id, slot_identifier } = await ctx.params;
   try {
-    const { rack_id, slot_identifier } = params;
     // ★ リクエストボディを一度変数で受け取る
     const body = await request.json();
 
@@ -84,9 +84,9 @@ export async function POST(request, { params }) {
 // =================================================================
 // PUT: 既存の部品情報の編集 (Update)
 // =================================================================
-export async function PUT(request, { params }) {
+export async function PUT(request, ctx) {
+  const { rack_id, slot_identifier } = await ctx.params;
   try {
-    const { rack_id, slot_identifier } = params;
     // ★ リクエストボディを一度変数で受け取る
     const body = await request.json();
     
@@ -156,9 +156,9 @@ export async function PUT(request, { params }) {
 // =================================================================
 // DELETE: スロットの行を完全に削除
 // =================================================================
-export async function DELETE(request, { params }) {
+export async function DELETE(request, ctx) {
+  const { rack_id, slot_identifier } = await ctx.params;
   try {
-    const { rack_id, slot_identifier } = params;
 
     // ★ UPDATE文をDELETE文に変更
     const query = `
