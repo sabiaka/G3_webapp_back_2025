@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // データベース接続
 
-export async function POST(request, { params }) {
+export async function POST(request, ctx) {
+  const { rack_id, slot_identifier } = await ctx.params;
   // clientの取得は不要
   try {
-    const { rack_id, slot_identifier } = params;
     const { quantity_to_use } = await request.json();
 
     if (quantity_to_use === undefined || typeof quantity_to_use !== 'number' || quantity_to_use <= 0) {

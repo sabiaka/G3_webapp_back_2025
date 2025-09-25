@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
-export async function GET(request, { params }) {
-  const { id } = params;
+export async function GET(request, ctx) {
+  const { id } = await ctx.params;
   const { searchParams } = new URL(request.url);
 
   const date = searchParams.get("date");
