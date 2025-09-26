@@ -50,7 +50,7 @@ export async function GET(request) {
 			debug('token exp (utc)=', expiresAt.toISOString());
 		}
 
-		const sql = `SELECT employee_id, employee_name, employee_role_name, employee_is_active FROM employees WHERE employee_id = $1 LIMIT 1`;
+		const sql = `SELECT employee_id, employee_name, employee_role_name, employee_is_active, employee_color_code FROM employees WHERE employee_id = $1 LIMIT 1`;
 		let result;
 		try {
 			result = await db.query(sql, [employee_id]);
@@ -77,6 +77,7 @@ export async function GET(request) {
 			employee_id: row.employee_id,
 			employee_name: row.employee_name,
 			role_name: row.employee_role_name,
+			employee_color_code: row.employee_color_code,
 			// 参考用に要求があれば返す: employee_user_id, role_name(元payload)
 			_debug: process.env.DEBUG_AUTH === '1' ? { employee_user_id, token_role: role_name } : undefined,
 		});

@@ -83,7 +83,6 @@ CREATE TABLE machine_status (
     machine_last_inspection DATE,                                -- 最終点検日
     next_inspection_date DATE                                    -- 次回点検予定日
     -- ,FOREIGN KEY (machine_id) REFERENCES machines(machine_id) -- 必要なら制約を有効化
-);
 
 -- 【Machine logs(エラーログ)】
 CREATE TABLE machine_logs (

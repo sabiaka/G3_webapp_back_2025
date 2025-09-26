@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server'; // これが必須だよ！
 import db from '@/lib/db'; // DB接続用
 
 // requestの他に、paramsを受け取る
-export async function GET(request, { params }) {
+export async function GET(request, ctx) {
   try {
     // URLからIDを取得 (例: /api/employees/1 の場合は id = "1")
-    const { id } = await params;
+    const { id } = await ctx.params;
 
     // パラメータ化クエリでSQLインジェクションを防ぐ
     const query = 'SELECT * FROM employees WHERE employee_id = $1';
@@ -87,9 +87,9 @@ async function resolveNamesByIds({ role_id, line_id }) {
 }
 
 // PUT: 従業員を更新
-export async function PUT(request, { params }) {
+export async function PUT(request, ctx) {
+  const { id } = await ctx.params;
   try {
-    const { id } = params;
     const body = await request.json();
 
     const {
@@ -159,9 +159,9 @@ export async function PUT(request, { params }) {
 // import { NextResponse } from 'next/server';
 // import db from '@/lib/db';
 
-export async function DELETE(request, { params }) {
+export async function DELETE(request, ctx) {
+  const { id } = await ctx.params;
   try {
-    const { id } = params;
 
     // 該当従業員を論理削除（is_active=false）
     const result = await db.query(
