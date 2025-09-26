@@ -1,7 +1,8 @@
 -- 【Role (権限) マスタ化】
 CREATE TABLE roles (
     role_id SERIAL PRIMARY KEY,            -- 自動採番
-    role_name VARCHAR(50) UNIQUE NOT NULL  -- 権限名(例:"管理者"や"一般")
+    role_name VARCHAR(50) UNIQUE NOT NULL,  -- 権限名(例:"管理者"や"一般")
+    is_admin BOOLEAN NOT NULL DEFAULT FALSE --追加 09/25
 );
 
 -- 【Production Line (担当ライン) マスタ化】
@@ -65,23 +66,35 @@ CREATE TABLE notifications (
     FOREIGN KEY (notification_priority_id) REFERENCES priorities(priority_id)
 );
 
--- 【Machine Name (機械名) マスタ化】
+-- 【Machine Name(機械名)マスタ化】
 CREATE TABLE machines (
     machine_id SERIAL PRIMARY KEY,             -- 機械ID（自動採番）
     machine_name VARCHAR(100) UNIQUE NOT NULL  -- 機械名（例: "生産機Mk-I"）
 );
 
--- 【Machine Status(生産機械状況)】
+-- 【Machine Status(機械状況)】
 CREATE TABLE machine_status (
-    machine_status_id SERIAL PRIMARY KEY,      -- 状態ID（自動採番）
-    machine_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 状態記録日時
-    machine_id INT NOT NULL,                   -- 機械ID（machinesテーブルの外部キー）
-    machine_status VARCHAR(20) NOT NULL CHECK (machine_status IN ('稼働中', '停止中', '異常あり', 'メンテ中')), -- 状態を限定
-    machine_trouble_info TEXT,                 -- 不具合情報
-    machine_last_inspection DATE,              -- 最終点検日
-    FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+    machine_status_id SERIAL PRIMARY KEY,                        -- 主キー
+    machine_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 状態記録時刻
+    machine_id INT NOT NULL,                                     -- 対象機械ID（machines.machine_id）
+    status VARCHAR(20) NOT NULL CHECK (status IN ('稼働中','停止中','異常あり','メンテ中')), -- 現在ステータス
+    today_uptime_seconds INT DEFAULT 0,                          -- 今日の稼働秒数（算出配信方式なら冗長列）
+    today_production_count INT DEFAULT 0,                        -- 今日の累計生産数
+    machine_last_inspection DATE,                                -- 最終点検日
+    next_inspection_date DATE                                    -- 次回点検予定日
+    -- ,FOREIGN KEY (machine_id) REFERENCES machines(machine_id) -- 必要なら制約を有効化
 );
 
+-- 【Machine logs(エラーログ)】
+CREATE TABLE machine_logs (
+    log_id SERIAL PRIMARY KEY,                                           -- ログID
+    machine_id INT NOT NULL,                                             -- 対象機械ID
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,                       -- 発生時刻
+    log_type VARCHAR(10) CHECK (log_type IN ('error','warning','info')), -- 種別
+    title VARCHAR(100) NOT NULL,                                         -- ログタイトル（コード + 概要）
+    message TEXT,                                                        -- 詳細メッセージ
+    FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+);
 
 --【画像検査テーブル】
 CREATE TABLE inspection_results (
@@ -92,15 +105,17 @@ CREATE TABLE inspection_results (
     inspection_reason TEXT NULL,                                        -- 問題点詳細
     inspection_image_path TEXT NOT NULL,                                -- 検査画像パス
     inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 撮影日時
-    inspection_inspected_time TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP -- 検査日時
+    inspection_inspected_time TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP  -- 検査日時
 );
 
---【ホックリング残数・生産数テーブル】
+--【生産個数管理テーブル】
 CREATE TABLE machine_production (
-    machine_prod_id SERIAL PRIMARY KEY,                             -- 生産データID（自動採番）
-    machine_prod_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 記録日時
-    machine_prod_hook_remaining INT NOT NULL,                       -- ホックリング残数
-    machine_prod_count INT NOT NULL                                 -- 生産数
+    production_id SERIAL PRIMARY KEY,
+    machine_id INT NOT NULL,-- ★ VARCHARからINT(整数)型に変更
+    product_id INT NOT NULL,
+    production_count INT NOT NULL,
+    captured_time TIMESTAMP NOT NULL,
+    FOREIGN KEY (machine_id) REFERENCES machines(machine_id)-- ★ machinesテーブルのmachine_idと連携させる設定（外部キー）
 );
 
 -- 【生産数管理テーブル】
@@ -116,7 +131,6 @@ CREATE TABLE production_reports (
     prodreport_remarks TEXT,                       -- 備考
     FOREIGN KEY (prodreport_employee_id) REFERENCES employees(employee_id)
 );
-
 
 --【部品在庫管理(棚ver)テーブル】
 CREATE TABLE racks (
@@ -168,4 +182,3 @@ CREATE TABLE slots (
     --parts_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     --FOREIGN KEY (parts_rack_id) REFERENCES racks(rack_id) -- 外部キー制約
 --);
-
