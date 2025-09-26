@@ -1,18 +1,12 @@
 -- roles (権限) テーブルへの仮データ挿入
-INSERT INTO roles (role_name) VALUES
-('管理者'),
-('一般'),
-('リーダー'),
-('研修生'),
-('スタッフ');
+INSERT INTO roles (role_name, is_admin) VALUES
+  ('管理者', TRUE),
+  ('一般従業員', FALSE);
 
 -- production_lines (担当ライン) テーブルへの仮データ挿入
 INSERT INTO production_lines (line_name) VALUES
-('組立'),
-('塗装'),
-('検査'),
-('梱包'),
-('特殊');
+  ('Aライン'),
+  ('Bライン');
 
 -- employees (従業員) テーブルへの仮データ挿入
 -- パスワードは実際にはハッシュ化して保存してください
