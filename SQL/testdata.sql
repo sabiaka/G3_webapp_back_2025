@@ -10,9 +10,9 @@ INSERT INTO production_lines (line_name) VALUES
 
 -- employees (従業員) テーブルへの仮データ挿入
 -- パスワードは実際にはハッシュ化して保存してください
-INSERT INTO employees (employee_name, employee_user_id, employee_password, employee_is_active, employee_role_name, employee_line_name, employee_special_notes, employee_color_code) VALUES
-('山田 太郎', 't.yamada', 'password123', TRUE, 'リーダー', '組立', 'フォークリフト免許保持', 'a3a8e6'),
-('佐藤 花子', 'h.sato', 'password123', TRUE, 'スタッフ', '塗装', '色彩検定2級', 'e6a3c8');
+INSERT INTO employees (employee_name,employee_user_id,employee_password,employee_is_active,employee_role_id,employee_line_id,employee_special_notes,employee_color_code) VALUES
+('山田 太郎','t.yamada','123456',true,1,1,'フォークリフト免許保持','a3a8e6');
+
 
 -- reports (日報) テーブルへの仮データ挿入
 INSERT INTO reports (report_employee_id, report_date, report_product_name, report_line_id, report_production_result, report_today_work, report_memo) VALUES
