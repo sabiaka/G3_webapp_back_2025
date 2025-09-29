@@ -73,9 +73,17 @@ export async function POST(request) {
     }
 
     const selectSql = `
-      SELECT employee_id, employee_user_id, employee_password, employee_name, employee_role_name, employee_is_active
-      FROM employees
-      WHERE employee_user_id = $1
+      SELECT 
+        e.employee_id, 
+        e.employee_user_id, 
+        e.employee_password, 
+        e.employee_name, 
+        e.employee_is_active,
+        e.employee_role_id,
+        r.role_name
+      FROM employees e
+      LEFT JOIN roles r ON r.role_id = e.employee_role_id
+      WHERE e.employee_user_id = $1
       LIMIT 1;
     `;
     const result = await db.query(selectSql, [employee_user_id]);
@@ -131,7 +139,8 @@ export async function POST(request) {
     const tokenPayload = {
       employee_id: user.employee_id,
       employee_user_id: user.employee_user_id,
-      role_name: user.employee_role_name,
+      role_id: user.employee_role_id,
+      role_name: user.role_name,
     };
 
     const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -142,7 +151,8 @@ export async function POST(request) {
         user: {
           employee_id: user.employee_id,
           employee_name: user.employee_name,
-          role_name: user.employee_role_name,
+          role_id: user.employee_role_id,
+          role_name: user.role_name,
         },
       },
       { status: 200 }
