@@ -4,13 +4,14 @@ import bcrypt from 'bcrypt';
 
 /**
  * 従業員データを取得するAPI (GET)
- * （この処理はすでに正しく実装されているため変更ありません）
+ * @description is_activeを除く全ての検索フィルターを部分一致に変更
  */
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const sort = searchParams.get('sort');
 
+    // クエリパラメータとDBカラムのマッピング
     const paramToColumnMap = {
       'name_like': 'e.employee_name',
       'is_active': 'e.employee_is_active',
@@ -46,17 +47,20 @@ export async function GET(request) {
         production_lines pl ON e.employee_line_id = pl.line_id
     `;
 
+    // WHERE句を動的に構築
     const whereClauses = [];
     const queryParams = [];
     let paramIndex = 1;
 
-    for (const [key, value] of Object.entries(filters)) {
-      if (key === 'e.employee_name') {
-        whereClauses.push(`${key} LIKE $${paramIndex++}`);
-        queryParams.push(`%${value}%`);
-      } else {
-        whereClauses.push(`${key} = $${paramIndex++}`);
+    for (const [column, value] of Object.entries(filters)) {
+      if (column === 'e.employee_is_active') {
+        // is_active はブーリアン型なので完全一致(=)で検索
+        whereClauses.push(`${column} = $${paramIndex++}`);
         queryParams.push(value);
+      } else {
+        // それ以外の文字列カラムは部分一致(LIKE)で検索
+        whereClauses.push(`${column} LIKE $${paramIndex++}`);
+        queryParams.push(`%${value}%`);
       }
     }
 
@@ -97,14 +101,11 @@ export async function GET(request) {
 
 /**
  * 新しい従業員を登録するAPI (POST)
- * @description リクエストボディの 'role_id', 'line_id' を受け取り、
- * DB登録後に仕様書通りのJSONを返すように修正
  */
 export async function POST(request) {
   try {
     const body = await request.json();
     
-    // リクエストボディから各データを取り出す
     const { 
       employee_name, 
       employee_user_id, 
@@ -115,7 +116,6 @@ export async function POST(request) {
       special_notes 
     } = body;
 
-    // 必須項目のバリデーション
     if (!employee_name || !employee_user_id || !password || role_id === undefined || line_id === undefined) {
       return NextResponse.json(
         { message: '必須項目が不足しています。' },
@@ -123,10 +123,8 @@ export async function POST(request) {
       );
     }
     
-    // パスワードをハッシュ化
     const hashedPassword = await bcrypt.hash(password, 10); 
 
-    // INSERT文を定義。RETURNING * で登録後のデータをすべて取得
     const query = `
       INSERT INTO employees (
         employee_name, 
@@ -145,18 +143,15 @@ export async function POST(request) {
       employee_name, 
       employee_user_id, 
       hashedPassword,
-      role_id, // リクエストの role_id を employee_role_id にマッピング
-      line_id, // リクエストの line_id を employee_line_id にマッピング
+      role_id,
+      line_id,
       color_code, 
       special_notes
     ];
     
-    // クエリ実行
     const result = await db.query(query, values);
     const newEmployee = result.rows[0];
 
-    // --- 変更点: レスポンスの形式を仕様書に合わせる ---
-    // 登録後のデータ(newEmployee)から、レスポンスに必要な項目だけを抜き出して整形
     const formattedResponse = {
       employee_id: newEmployee.employee_id,
       employee_name: newEmployee.employee_name,
@@ -167,28 +162,23 @@ export async function POST(request) {
       special_notes: newEmployee.employee_special_notes,
       color_code: newEmployee.employee_color_code
     };
-    // ---------------------------------------------
 
-    // 整形したデータを201 Createdステータスで返す
     return NextResponse.json(formattedResponse, { status: 201 });
 
   } catch (error) {
     console.error('DBエラー発生！:', error);
-    // ユーザーIDの重複エラー (unique constraint violation)
     if (error.code === '23505') {
       return NextResponse.json(
         { message: '指定されたemployee_user_idは既に使用されています。' },
         { status: 409 }
       );
     }
-    // 外部キー制約エラー (存在しないrole_idやline_idが指定された場合)
     if (error.code === '23503') {
       return NextResponse.json(
         { message: '指定された役割(role)またはライン(line)が存在しません。' },
         { status: 400 }
       );
     }
-    // その他のサーバーエラー
     return NextResponse.json(
       { message: 'サーバーでエラーが発生しました。' },
       { status: 500 }
