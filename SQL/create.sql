@@ -11,19 +11,19 @@ CREATE TABLE production_lines (
     line_name VARCHAR(100) UNIQUE NOT NULL -- ライン名(例:"ラインA"や"ラインB")
 );
 
--- 【Employee ID (従業員ID) で統一管理】
+-- 【employees(従業員リスト)】(2025/09/26 修正)
 CREATE TABLE employees (
-    employee_id SERIAL PRIMARY KEY,               -- 自動採番
-    employee_name VARCHAR(100) NOT NULL,          -- 名前（フルネーム）
-    employee_user_id VARCHAR(50) UNIQUE NOT NULL, -- ユーザーID(ログイン用、一意)
-    employee_password VARCHAR(255) NOT NULL,      -- パスワード(ハッシュ保存推奨)
-    employee_is_active BOOLEAN DEFAULT TRUE,      -- 有効/無効フラグ(TRUE=有効)
-    employee_role_name VARCHAR(50) NOT NULL,      -- 権限名
-    employee_line_name VARCHAR(50) NOT NULL,      -- 担当ライン名
-    employee_special_notes TEXT,                  -- 特記事項（メモなど）
-    employee_color_code CHAR(6)                   -- カラーコード（例:"FF0000"）
-    --FOREIGN KEY (employee_role_name) REFERENCES roles(role_id),
-    --FOREIGN KEY (employee_line_name) REFERENCES production_lines(line_id)
+    employee_id SERIAL PRIMARY KEY,                     -- 自動採番
+    employee_name VARCHAR(100) NOT NULL,                -- 名前（フルネーム）
+    employee_user_id VARCHAR(50) UNIQUE NOT NULL,       -- ユーザーID（ログイン用、一意）
+    employee_password VARCHAR(255) NOT NULL,            -- パスワード（ハッシュ保存推奨）
+    employee_is_active BOOLEAN DEFAULT TRUE,            -- 有効/無効フラグ（TRUE=有効）
+    employee_role_id INT NOT NULL,                      -- 権限ID
+    employee_line_id INT NOT NULL,                      -- 担当ラインID
+    employee_special_notes TEXT,                        -- 特記事項（メモなど）
+    employee_color_code CHAR(6),                        -- カラーコード (例:"FF0000")
+    FOREIGN KEY (employee_role_id) REFERENCES roles(role_id),
+    FOREIGN KEY (employee_line_id) REFERENCES production_lines(line_id)
 );
 
 -- 【Reports(日報)】
