@@ -15,3 +15,4 @@ DROP TABLE
 
 DROP TABLE IF EXISTS machine_logs;
 DROP TABLE IF EXISTS machine_status;
+DROP TABLE IF EXISTS employees;
