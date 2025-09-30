@@ -77,7 +77,6 @@ export async function POST(request, ctx) {
 		};
 
 		return NextResponse.json({
-			status: "稼働中",
 			started_at: toJstIso(startedAt),
 		});
 	} catch (err) {

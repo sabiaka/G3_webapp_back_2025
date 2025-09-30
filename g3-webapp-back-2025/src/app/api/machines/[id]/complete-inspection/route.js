@@ -43,15 +43,13 @@ export async function POST(request, ctx) {
                 );
 
         // 列存在チェック（テーブルに1行もない場合を考慮して別途確認）
-        const colCheck = await db.query(
+                const colCheck = await db.query(
+                        `
+                SELECT 
+                    EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='machine_status' AND column_name='inspection_interval_days') AS has_interval,
+                    EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='machine_status' AND column_name='next_inspection_date') AS has_next_date
             `
-        SELECT 
-          EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='machine_status' AND column_name='status') AS has_status,
-          EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='machine_status' AND column_name='inspection_interval_days') AS has_interval,
-          EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='machine_status' AND column_name='next_inspection_date') AS has_next_date
-      `
-        );
-        const hasStatus = !!colCheck.rows[0]?.has_status;
+                );
         const hasInterval = !!colCheck.rows[0]?.has_interval;
         const hasNextDate = !!colCheck.rows[0]?.has_next_date;
 
@@ -119,22 +117,8 @@ export async function POST(request, ctx) {
             // レコードがない場合は新規行を追加
             if (hasInterval) {
                 // interval がある新スキーマ
-                let insertRes;
-                if (hasStatus) {
-                    insertRes = await db.query(
-                        `
-              INSERT INTO machine_status (machine_id, status, machine_last_inspection)
-              VALUES ($1, '停止中', CURRENT_DATE)
-              RETURNING 
-                machine_id,
-                machine_last_inspection::date AS last_inspection_date,
-                (machine_last_inspection + inspection_interval_days)::date AS next_inspection_date
-            `,
-                        [machineId]
-                    );
-                } else {
-                    insertRes = await db.query(
-                        `
+                const insertRes = await db.query(
+                    `
               INSERT INTO machine_status (machine_id, machine_last_inspection)
               VALUES ($1, CURRENT_DATE)
               RETURNING 
@@ -142,28 +126,13 @@ export async function POST(request, ctx) {
                 machine_last_inspection::date AS last_inspection_date,
                 (machine_last_inspection + inspection_interval_days)::date AS next_inspection_date
             `,
-                        [machineId]
-                    );
-                }
+                    [machineId]
+                );
                 row = insertRes.rows[0];
             } else if (hasNextDate) {
                 // 旧スキーマ: next_inspection_date を直接保持
-                let insertRes;
-                if (hasStatus) {
-                    insertRes = await db.query(
-                        `
-              INSERT INTO machine_status (machine_id, status, machine_last_inspection, next_inspection_date)
-              VALUES ($1, '停止中', CURRENT_DATE, CURRENT_DATE + 90)
-              RETURNING 
-                machine_id,
-                machine_last_inspection::date AS last_inspection_date,
-                next_inspection_date::date AS next_inspection_date
-            `,
-                        [machineId]
-                    );
-                } else {
-                    insertRes = await db.query(
-                        `
+                const insertRes = await db.query(
+                    `
               INSERT INTO machine_status (machine_id, machine_last_inspection, next_inspection_date)
               VALUES ($1, CURRENT_DATE, CURRENT_DATE + 90)
               RETURNING 
@@ -171,9 +140,8 @@ export async function POST(request, ctx) {
                 machine_last_inspection::date AS last_inspection_date,
                 next_inspection_date::date AS next_inspection_date
             `,
-                        [machineId]
-                    );
-                }
+                    [machineId]
+                );
                 row = insertRes.rows[0];
             } else {
                 // どちらの列もない想定外のスキーマ
