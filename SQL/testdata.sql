@@ -31,12 +31,38 @@ INSERT INTO priorities (priority_label) VALUES
 ('低');
 
 -- notifications (生産目標通知) テーブルへの仮データ挿入
-INSERT INTO notifications (notification_line_id, notification_quantity, notification_item_name, notification_item_size, notification_color, notification_spring_type, notification_accessories, notification_delivery_method, notification_delivery_address, notification_delivery_company, notification_remarks, notification_priority_id) VALUES
-(1, 500, 'フックリングV2', 'M', 'シルバー', '標準バネ', '説明書A', '通常便', '東京都千代田区1-1-1', 'ABC運送', '7月末納期厳守', 1),
-(2, 1000, '装飾パネル', 'L', 'ブラック', NULL, '取付ネジセット', 'チャーター便', '大阪府大阪市北区2-2-2', 'XYZ物流', NULL, 2),
-(3, 2500, '検査キット', 'S', 'クリア', NULL, NULL, '通常便', '愛知県名古屋市中区3-3-3', '東海運輸', '割れ物注意', 3),
-(4, 800, '梱包箱セット', 'M', '茶', NULL, '緩衝材', '定期便', '福岡県福岡市博多区4-4-4', '九州急便', NULL, 4),
-(1, 1200, 'フックリングV3', 'M', 'ゴールド', '強化バネ', '説明書B', '航空便', '北海道札幌市中央区5-5-5', '北国空輸', '至急オーダー', 1);
+INSERT INTO notifications (
+    notification_line_id,
+    notification_quantity,
+    notification_item_name,
+    notification_item_size,
+    notification_color,
+    notification_spring_type,
+    notification_accessories,
+    notification_delivery_method,
+    notification_delivery_address,
+    notification_delivery_company,
+    notification_remarks,
+    notification_priority_id,
+    is_completed
+) VALUES (
+    1,                       -- production_linesテーブルに存在するline_id
+    10,                       -- 数量
+    'テスト商品',          -- 商品名
+    '10x10',              -- サイズ
+    '白',                -- 色
+    '1.0mmポケットコイル',   -- バネの種類
+    '予備ネジ10個',              -- 付属品
+    'テスト便',              -- 配送方法
+    '東京都xx区1-2-3', -- 配送先住所
+    'テスト会社',               -- 配送会社（NULLも可）
+    'テスト',        -- 備考（NULLも可）
+    1,                       -- prioritiesテーブルに存在するpriority_id
+    false                    -- 完了状態 (true または false)
+);
+
+
+
 
 -- machines (機械名) テーブルへの仮データ挿入
 INSERT INTO machines (machine_name) VALUES

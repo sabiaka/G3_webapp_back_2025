@@ -48,20 +48,21 @@ CREATE TABLE priorities (
 
 -- 【Notifications(生産目標通知)】
 CREATE TABLE notifications (
-    notification_id SERIAL PRIMARY KEY,         -- 通知ID（自動採番）
-    notification_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 通知日時（自動設定）
-    notification_line_id INT NOT NULL,          -- 担当ラインID（外部キー）
-    notification_quantity INT NOT NULL,         -- 生産数量
-    notification_item_name VARCHAR(50),         -- 品名
-    notification_item_size VARCHAR(50),         -- サイズ
-    notification_color VARCHAR(50),             -- カラー
-    notification_spring_type VARCHAR(50),       -- バネタイプ
-    notification_accessories VARCHAR(50),       -- 同梱品
-    notification_delivery_method VARCHAR(50),   -- 配送方法
-    notification_delivery_address VARCHAR(100), -- 配送先住所
-    notification_delivery_company VARCHAR(50),  -- 配送会社名
-    notification_remarks TEXT,                  -- 備考
-    notification_priority_id INT NOT NULL,      -- 優先度ID（外部キー）
+    notification_id SERIAL PRIMARY KEY,
+    notification_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notification_line_id INT NOT NULL,
+    notification_quantity INT NOT NULL,
+    notification_item_name VARCHAR(50),
+    notification_item_size VARCHAR(50),
+    notification_color VARCHAR(50),
+    notification_spring_type VARCHAR(50),
+    notification_accessories VARCHAR(50),
+    notification_delivery_method VARCHAR(50),
+    notification_delivery_address VARCHAR(100),
+    notification_delivery_company VARCHAR(50),
+    notification_remarks TEXT,
+    notification_priority_id INT NOT NULL,
+    is_completed BOOLEAN NOT NULL DEFAULT false,
     FOREIGN KEY (notification_line_id) REFERENCES production_lines(line_id),
     FOREIGN KEY (notification_priority_id) REFERENCES priorities(priority_id)
 );
