@@ -38,7 +38,7 @@ export async function GET(request) {
 			return NextResponse.json({ error: 'Unauthorized: invalid token' }, { status: 401 });
 		}
 
-		const { employee_id, employee_user_id, role_name, exp } = payload || {};
+		const { employee_id, employee_user_id, role_id, role_name, exp } = payload || {};
 		if (!employee_id) {
 			debug('employee_id missing in payload');
 			return NextResponse.json({ error: 'Unauthorized: no employee_id' }, { status: 401 });
@@ -50,7 +50,19 @@ export async function GET(request) {
 			debug('token exp (utc)=', expiresAt.toISOString());
 		}
 
-		const sql = `SELECT employee_id, employee_name, employee_role_name, employee_is_active, employee_color_code FROM employees WHERE employee_id = $1 LIMIT 1`;
+		const sql = `
+			SELECT 
+			  e.employee_id, 
+			  e.employee_name, 
+			  e.employee_is_active, 
+			  e.employee_color_code,
+			  e.employee_role_id,
+			  r.role_name
+			FROM employees e
+			LEFT JOIN roles r ON r.role_id = e.employee_role_id
+			WHERE e.employee_id = $1
+			LIMIT 1
+		`;
 		let result;
 		try {
 			result = await db.query(sql, [employee_id]);
@@ -76,10 +88,11 @@ export async function GET(request) {
 		return NextResponse.json({
 			employee_id: row.employee_id,
 			employee_name: row.employee_name,
-			role_name: row.employee_role_name,
+			role_id: row.employee_role_id,
+			role_name: row.role_name,
 			employee_color_code: row.employee_color_code,
 			// 参考用に要求があれば返す: employee_user_id, role_name(元payload)
-			_debug: process.env.DEBUG_AUTH === '1' ? { employee_user_id, token_role: role_name } : undefined,
+			_debug: process.env.DEBUG_AUTH === '1' ? { employee_user_id, token_role_id: role_id, token_role_name: role_name } : undefined,
 		});
 	} catch (e) {
 		console.error('auth/me unexpected error:', e);

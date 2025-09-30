@@ -12,4 +12,7 @@ DROP TABLE
   roles,
   production_lines,
   priorities
-CASCADE;
+
+DROP TABLE IF EXISTS machine_logs;
+DROP TABLE IF EXISTS machine_status;
+DROP TABLE IF EXISTS employees;
