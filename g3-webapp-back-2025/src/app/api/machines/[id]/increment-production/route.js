@@ -33,7 +33,7 @@ export async function POST(request, ctx) {
         // 2) 直近のステータス行取得（status には依存せず、machine_start_time の有無で稼働中を判定）
         const latestRes = await db.query(
             `
-        SELECT machine_status_id, machine_start_time, today_production_count
+        SELECT machine_status_id, machine_start_time, today_production_count, machine_data_time
         FROM machine_status
         WHERE machine_id = $1
         ORDER BY machine_data_time DESC
@@ -49,22 +49,67 @@ export async function POST(request, ctx) {
             );
         }
 
-        const { machine_status_id } = latestRes.rows[0];
+        const latest = latestRes.rows[0];
+        const { machine_status_id, machine_start_time, machine_data_time } = latest;
 
-        // 3) today_production_count を原子的に +1 して返却
-        const updateRes = await db.query(
+        // 3) JSTで日付ロール判定
+        const dateRes = await db.query(
             `
-        UPDATE machine_status
-        SET today_production_count = COALESCE(today_production_count, 0) + 1
-        WHERE machine_status_id = $1
-        RETURNING today_production_count
-      `,
-            [machine_status_id]
+          SELECT 
+            (now() AT TIME ZONE 'Asia/Tokyo')::date AS today_jst,
+            ($1::timestamp AT TIME ZONE 'Asia/Tokyo')::date AS row_date
+        `,
+            [machine_data_time]
         );
+        const todayJst = dateRes.rows[0].today_jst;
+        const rowDate = dateRes.rows[0].row_date;
 
-        return NextResponse.json({
-            today_production_count: updateRes.rows[0].today_production_count,
-        });
+        if (String(todayJst) !== String(rowDate)) {
+            // 日付が変わっていたら、新規行を作成して 1 から開始
+            let insertRes;
+            try {
+                insertRes = await db.query(
+                    `
+                  INSERT INTO machine_status (machine_id, status, machine_start_time, today_production_count)
+                  VALUES ($1, '稼働中', $2, 1)
+                  RETURNING today_production_count
+                `,
+                    [machineId, machine_start_time]
+                );
+            } catch (e) {
+                if (e && e.code === '42703') { // status 列がない場合
+                    insertRes = await db.query(
+                        `
+                      INSERT INTO machine_status (machine_id, machine_start_time, today_production_count)
+                      VALUES ($1, $2, 1)
+                      RETURNING today_production_count
+                    `,
+                        [machineId, machine_start_time]
+                    );
+                } else {
+                    throw e;
+                }
+            }
+
+            return NextResponse.json({
+                today_production_count: insertRes.rows[0].today_production_count,
+            });
+        } else {
+            // 同日中なら原子的に +1
+            const updateRes = await db.query(
+                `
+              UPDATE machine_status
+              SET today_production_count = COALESCE(today_production_count, 0) + 1
+              WHERE machine_status_id = $1
+              RETURNING today_production_count
+            `,
+                [machine_status_id]
+            );
+
+            return NextResponse.json({
+                today_production_count: updateRes.rows[0].today_production_count,
+            });
+        }
     } catch (err) {
         console.error("API Error:", err);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
