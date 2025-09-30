@@ -77,23 +77,23 @@ CREATE TABLE machines (
 CREATE TABLE machine_status (
     machine_status_id SERIAL PRIMARY KEY,                        -- 主キー
     machine_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 状態記録時刻
-    machine_name VARCHAR(100) NOT NULL,                          -- 対象機械ID（machines.machine_id）
-    status VARCHAR(20) NOT NULL CHECK (status IN ('稼働中','停止中','異常あり','メンテ中')), -- 現在ステータス
-    today_uptime_seconds INT DEFAULT 0,                          -- 今日の稼働秒数（算出配信方式なら冗長列）
+    machine_id INT NOT NULL,                                     -- 対象機械ID（machines.machine_id）
+    machine_start_time TIMESTAMP NULL,                           -- 機械の起動時刻（稼働開始のタイムスタンプ）
     today_production_count INT DEFAULT 0,                        -- 今日の累計生産数
     machine_last_inspection DATE,                                -- 最終点検日
-    next_inspection_date DATE                                    -- 次回点検予定日
+    inspection_interval_days INT DEFAULT 90 NOT NULL             -- 点検間隔（日数）
     -- ,FOREIGN KEY (machine_id) REFERENCES machines(machine_id) -- 必要なら制約を有効化
 );
 
 -- 【Machine logs(エラーログ)】
 CREATE TABLE machine_logs (
-    log_id SERIAL PRIMARY KEY,
-    machine_name VARCHAR(100) NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    log_type VARCHAR(10) CHECK (log_type IN ('error','warning','info')),
-    title VARCHAR(100) NOT NULL,
-    message TEXT
+    log_id SERIAL PRIMARY KEY,                                           -- ログID
+    machine_name VARCHAR(100) NOT NULL,                                  -- 対象機械NAME
+    unit_id INT NULL,                                                    -- 対象ユニットID (任意)
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,                       -- 発生時刻
+    log_type VARCHAR(10) CHECK (log_type IN ('error','warning','info')), -- 種別
+    title VARCHAR(100) NOT NULL,                                         -- ログタイトル（コード + 概要）
+    message TEXT                                                         -- 詳細メッセージ
 );
 
 --【画像検査テーブル】
