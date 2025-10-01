@@ -6,7 +6,8 @@ import db from '@/lib/db';
  */
 export async function PUT(request, { params }) {
   try {
-    const id = parseInt(params.id, 10);
+    const { id: idParam } = await params;
+    const id = parseInt(idParam, 10);
     const body = await request.json();
     const { line_name } = body;
 
@@ -57,7 +58,8 @@ export async function PUT(request, { params }) {
  */
 export async function DELETE(request, { params }) {
   try {
-    const id = parseInt(params.id, 10);
+    const { id: idParam } = await params;
+    const id = parseInt(idParam, 10);
 
     // --- バリデーション ---
     if (isNaN(id)) {
