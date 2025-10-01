@@ -80,7 +80,8 @@ export async function POST(request) {
         e.employee_name, 
         e.employee_is_active,
         e.employee_role_id,
-        r.role_name
+        r.role_name,
+        COALESCE(r.is_admin, FALSE) AS role_is_admin
       FROM employees e
       LEFT JOIN roles r ON r.role_id = e.employee_role_id
       WHERE e.employee_user_id = $1
@@ -141,6 +142,7 @@ export async function POST(request) {
       employee_user_id: user.employee_user_id,
       role_id: user.employee_role_id,
       role_name: user.role_name,
+      is_admin: !!user.role_is_admin,
     };
 
     const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -153,6 +155,7 @@ export async function POST(request) {
           employee_name: user.employee_name,
           role_id: user.employee_role_id,
           role_name: user.role_name,
+          is_admin: !!user.role_is_admin,
         },
       },
       { status: 200 }
