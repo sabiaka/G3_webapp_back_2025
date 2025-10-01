@@ -63,6 +63,13 @@ console.log(`[DB] Network environment detected: ${networkEnv.env} (Server IP: ${
 
 const pool = new Pool(networkEnv.config);
 
+// すべての接続でタイムゾーンをJSTに固定（CURRENT_TIMESTAMPや型変換の基準をJSTへ）
+pool.on('connect', (client) => {
+  client.query("SET TIME ZONE 'Asia/Tokyo'").catch((e) => {
+    console.error('[DB] Failed to set session time zone to Asia/Tokyo:', e);
+  });
+});
+
 export default {
   query: (text, params) => pool.query(text, params),
 };
