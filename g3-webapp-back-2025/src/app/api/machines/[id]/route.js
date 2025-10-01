@@ -29,43 +29,90 @@ export async function GET(request, ctx) {
       machineId = res.rows[0].machine_id;
     }
 
-    // 最新のステータス1行を取得しつつ、必要な値を算出（uptime/next_inspection_date）
+    // クエリでやってること
+    // - 最新ステータスを1件だけ取る（DISTINCT ON）
+    // - JSTで今日の稼働秒数を出す（今日0:00〜今。startが昨日でも今日分だけ）
+    // - 次回点検日は「最後の点検 + 間隔」（無ければ null）
+    // - 生SQLは $1 とかでパラメータ化、タイムゾーンは JST（AT TIME ZONE 'Asia/Tokyo'）
+    // 下のSQLでまとめて計算して返す
     const result = await db.query(
       `
       WITH jst AS (
-        SELECT (now() AT TIME ZONE 'Asia/Tokyo') AS now_jst
+        SELECT 
+          (now() AT TIME ZONE 'Asia/Tokyo') AS now_jst,
+          date_trunc('day', (now() AT TIME ZONE 'Asia/Tokyo')) AS today_start_jst
+      ),
+      latest AS (
+        SELECT DISTINCT ON (m.machine_id)
+          m.machine_id,
+          m.machine_name,
+          -- started_at（JSTをISO風に文字列化。互換のため末尾はZ）
+          CASE WHEN s.machine_start_time IS NULL THEN NULL
+               ELSE to_char((s.machine_start_time AT TIME ZONE 'Asia/Tokyo'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          END AS started_at,
+          s.machine_start_time,
+          s.machine_last_inspection,
+          s.inspection_interval_days,
+          COALESCE(s.today_production_count, 0)::int AS today_production_count
+        FROM machines m
+        LEFT JOIN LATERAL (
+          SELECT *
+          FROM machine_status s
+          WHERE s.machine_id = m.machine_id
+          ORDER BY s.machine_data_time DESC
+          LIMIT 1
+        ) s ON TRUE
+        WHERE m.machine_id = $1
+        ORDER BY m.machine_id, s.machine_data_time DESC
+      ),
+      uptime_calc AS (
+        SELECT 
+          l.machine_id,
+          l.machine_name,
+          l.started_at,
+          l.today_production_count,
+          -- 当日稼働秒数（JSTで本日0:00以降に限定し、startがそれ以前でも本日分のみカウント）
+          CASE 
+            WHEN l.machine_start_time IS NULL THEN 0
+            ELSE GREATEST(
+              0,
+              EXTRACT(
+                EPOCH FROM (
+                  (SELECT now_jst FROM jst) - GREATEST(
+                    l.machine_start_time,
+                    (SELECT today_start_jst FROM jst)
+                  )
+                )
+              )::int
+            )
+          END AS today_uptime_seconds,
+          l.machine_last_inspection,
+          l.inspection_interval_days
+        FROM latest l
+      ),
+      inspection AS (
+        SELECT 
+          machine_id,
+          to_char(machine_last_inspection::date, 'YYYY-MM-DD') AS last_inspection_date,
+          CASE 
+            WHEN machine_last_inspection IS NOT NULL AND inspection_interval_days IS NOT NULL
+              THEN to_char((machine_last_inspection + inspection_interval_days)::date, 'YYYY-MM-DD')
+            ELSE NULL
+          END AS next_inspection_date,
+          inspection_interval_days
+        FROM latest
       )
       SELECT 
-        m.machine_id,
-        m.machine_name,
-        -- started_at を UTC の 'Z' 付きISO文字列として返却
-        CASE WHEN ms.machine_start_time IS NULL THEN NULL
-             ELSE to_char((ms.machine_start_time AT TIME ZONE 'Asia/Tokyo'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-        END AS started_at,
-        -- 当日稼働秒数（JST日付が同じ場合のみ now - start を秒で）
-        CASE 
-          WHEN ms.machine_start_time IS NULL THEN 0
-          WHEN ((ms.machine_data_time AT TIME ZONE 'Asia/Tokyo')::date = (SELECT now_jst::date FROM jst))
-            THEN GREATEST(0, EXTRACT(EPOCH FROM ((SELECT now_jst FROM jst) - ms.machine_start_time))::int)
-          ELSE 0
-        END AS today_uptime_seconds,
-        COALESCE(ms.today_production_count, 0) AS today_production_count,
-        to_char(ms.machine_last_inspection::date, 'YYYY-MM-DD') AS last_inspection_date,
-        CASE 
-          WHEN ms.machine_last_inspection IS NOT NULL AND ms.inspection_interval_days IS NOT NULL
-            THEN to_char((ms.machine_last_inspection + ms.inspection_interval_days)::date, 'YYYY-MM-DD')
-          ELSE NULL
-        END AS next_inspection_date,
-        ms.inspection_interval_days
-      FROM machines m
-      LEFT JOIN LATERAL (
-        SELECT *
-        FROM machine_status s
-        WHERE s.machine_id = m.machine_id
-        ORDER BY s.machine_data_time DESC
-        LIMIT 1
-      ) ms ON TRUE
-      WHERE m.machine_id = $1
+        u.machine_id,
+        u.machine_name,
+        u.started_at,
+        u.today_uptime_seconds,
+        u.today_production_count,
+        i.last_inspection_date,
+        i.next_inspection_date,
+        i.inspection_interval_days
+      FROM uptime_calc u
+      JOIN inspection i ON u.machine_id = i.machine_id
       `,
       [machineId]
     );
@@ -99,7 +146,7 @@ export async function GET(request, ctx) {
       started_at: machine.started_at,
       today_uptime_seconds: machine.today_uptime_seconds,
       today_uptime_hms: toHms(machine.today_uptime_seconds),
-      today_production_count: machine.today_production_count,
+  today_production_count: Number.isFinite(Number(machine.today_production_count)) ? Number(machine.today_production_count) : 0,
       last_inspection_date: lastInspection,
       next_inspection_date: nextInspection,
       inspection_interval_days: machine.inspection_interval_days ?? null
