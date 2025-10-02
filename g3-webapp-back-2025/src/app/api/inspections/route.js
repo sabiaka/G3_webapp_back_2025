@@ -9,18 +9,10 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
 
-    // --- クエリパラメータ取得 ---
-    const typeAlias = searchParams.get('type');
+    const type = searchParams.get('type');
     const date = searchParams.get('date');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
-
-    // --- フィルタリングとページネーションの準備 ---
-    const typeToCameraNameMap = {
-      'spring': 'バネ止めカメラ',
-      'alayer': 'A層カメラ',
-    };
-    const cameraNameToFilterBy = typeToCameraNameMap[typeAlias];
     const offset = (page - 1) * limit;
 
     const whereClauses = [];
@@ -31,19 +23,21 @@ export async function GET(request) {
       whereClauses.push(`DATE(inspection_inspected_time) = $${paramIndex++}`);
       queryParams.push(date);
     }
-    if (cameraNameToFilterBy) {
-      whereClauses.push(`inspection_camera_id = $${paramIndex++}`);
-      queryParams.push(cameraNameToFilterBy);
+
+    if (type) {
+      whereClauses.push(`inspection_camera_id LIKE $${paramIndex++}`);
+      // ▼ 修正点: 部分一致から前方一致に変更 ▼
+      queryParams.push(`${type}%`);
+      // ▲ 修正点 ▲
     }
+
     const whereString = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // 1. フィルター条件に一致する全件数を取得
     const countQuery = `SELECT COUNT(*) FROM inspection_results ${whereString};`;
     const countResult = await db.query(countQuery, queryParams);
     const total_count = parseInt(countResult.rows[0].count, 10);
     const total_pages = Math.ceil(total_count / limit);
 
-    // 2. 指定されたページのログデータを取得
     const logParams = [...queryParams, limit, offset];
     const logsQuery = `
       SELECT
@@ -57,10 +51,8 @@ export async function GET(request) {
       FROM
         inspection_results
       ${whereString}
-      -- ▼ 修正点 ▼
       ORDER BY
-        inspection_id DESC -- 並び替えの基準を検査日時からIDに変更
-      -- ▲ 修正点 ▲
+        inspection_id DESC
       LIMIT $${paramIndex++}
       OFFSET $${paramIndex++};
     `;

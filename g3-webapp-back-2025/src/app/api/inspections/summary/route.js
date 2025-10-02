@@ -3,14 +3,14 @@ import db from '@/lib/db';
 
 /**
  * 指定した日付の検査サマリーを取得するAPI (GET)
- * @description ?type=spring のような短いエイリアスを正式なカメラ名に変換して検索します。
+ * @description ?type= で指定されたカメラ名（前方一致）で結果を絞り込みます。
  * @param {Request} request - Next.jsのRequestオブジェクト
  * @returns {NextResponse} - 検査サマリーのJSONレスポンス
  */
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const typeAlias = searchParams.get('type'); // 'spring' や 'alayer' を受け取る
+    const type = searchParams.get('type'); // カメラ名を直接受け取る
     let date = searchParams.get('date');
 
     // dateパラメータがなければ今日の日付をセット
@@ -20,26 +20,22 @@ export async function GET(request) {
       date = today.toISOString().split('T')[0];
     }
 
-    // --- ▼ 追加点 ▼ ---
-    // URLのtypeパラメータとDBのカメラ名を対応付けるための変換マップ
-    const typeToCameraNameMap = {
-      'spring': 'バネ止めカメラ',
-      'alayer': 'A層カメラ'
-    };
-    // 変換マップを使って、検索すべき正式なカメラ名を取得
-    const cameraNameToFilterBy = typeToCameraNameMap[typeAlias];
-    // --- ▲ 追加点 ▲ ---
+    // --- ▼ 修正点: エイリアス変換マップを削除 ▼ ---
+    // typeとカメラ名を対応付ける変換ロジックは不要になったため削除しました。
+    // --- ▲ 修正点 ▲ ---
 
     // --- クエリ構築 ---
     const queryParams = [date];
     const whereClauses = [`DATE(inspection_inspected_time) = $1`];
     let paramIndex = 2;
 
-    // typeが指定され、かつ変換マップに存在する有効な値だった場合のみ絞り込み条件を追加
-    if (cameraNameToFilterBy) {
-      whereClauses.push(`inspection_camera_id = $${paramIndex++}`);
-      queryParams.push(cameraNameToFilterBy);
+    // --- ▼ 修正点: typeによる前方一致検索に変更 ▼ ---
+    // typeが指定された場合、前方一致で絞り込み条件を追加
+    if (type) {
+      whereClauses.push(`inspection_camera_id LIKE $${paramIndex++}`);
+      queryParams.push(`${type}%`); // 前方一致検索
     }
+    // --- ▲ 修正点 ▲ ---
 
     const whereString = whereClauses.join(' AND ');
     
