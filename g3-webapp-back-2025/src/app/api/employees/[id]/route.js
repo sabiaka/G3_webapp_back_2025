@@ -8,7 +8,7 @@ import bcrypt from 'bcrypt';
  */
 export async function GET(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const query = `
       SELECT
         e.employee_id,
@@ -56,7 +56,7 @@ export async function GET(request, { params }) {
  * 従業員データを更新するAPI (PUT)
  */
 export async function PUT(request, { params }) {
-  const { id } = params;
+  const { id } = await params;
   try {
     const body = await request.json();
 
@@ -134,7 +134,7 @@ export async function PUT(request, { params }) {
  * @description 仕様書通り、レコードをDBから完全に削除する
  */
 export async function DELETE(request, { params }) {
-  const { id } = params;
+  const { id } = await params;
   try {
     // --- 変更点: UPDATE文をDELETE文に変更 ---
     const result = await db.query(

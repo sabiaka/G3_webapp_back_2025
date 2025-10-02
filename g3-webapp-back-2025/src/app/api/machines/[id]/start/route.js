@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
-// 機械の稼働開始 API (冪等)
+// 機械の稼働開始 API（既存があれば更新、なければ作成）
 // POST /api/machines/{id}/start
 export async function POST(request, ctx) {
 	const { id } = await ctx.params; // Next.js 15: params は非同期
@@ -30,43 +30,54 @@ export async function POST(request, ctx) {
 			machineId = res.rows[0].machine_id;
 		}
 
-			// 2) 直近の開始情報取得（status 廃止に伴い start 時刻だけで冪等とする）
-			const latestRes = await db.query(
+		// 2) 既存データがあるか確認（最新レコード）
+		const latestRes = await db.query(
 			`
-					SELECT machine_data_time, machine_start_time
-					FROM machine_status
-					WHERE machine_id = $1
-					ORDER BY machine_data_time DESC
-					LIMIT 1
+				SELECT machine_status_id, machine_start_time
+				FROM machine_status
+				WHERE machine_id = $1
+				ORDER BY machine_data_time DESC
+				LIMIT 1
 			`,
-				[machineId]
+			[machineId]
 		);
 
+		let startedAt;
 		if (latestRes.rows.length > 0) {
-			const latest = latestRes.rows[0];
-				// 直近で開始時刻があれば「すでに開始済み」とみなし、その時刻を返す（冪等）
-				if (latest.machine_start_time) {
-					return NextResponse.json({
-						status: "稼働中",
-						started_at: new Date(latest.machine_start_time).toISOString(),
-					});
-				}
+			// 3-a) 既存レコードがある場合は machine_start_time を更新
+			const updated = await db.query(
+				`
+					UPDATE machine_status
+					-- DBのタイムゾーンがUTCでもJSTで保存されるようにする
+					SET machine_start_time = (now() AT TIME ZONE 'Asia/Tokyo')
+					WHERE machine_status_id = $1
+					RETURNING machine_start_time
+				`,
+				[latestRes.rows[0].machine_status_id]
+			);
+			startedAt = updated.rows[0].machine_start_time;
+		} else {
+			// 3-b) 既存がなければ新規作成
+			const inserted = await db.query(
+				`
+					INSERT INTO machine_status (machine_id, machine_start_time)
+					VALUES ($1, (now() AT TIME ZONE 'Asia/Tokyo'))
+					RETURNING machine_start_time
+				`,
+				[machineId]
+			);
+			startedAt = inserted.rows[0].machine_start_time;
 		}
 
-			// 3) 稼働開始として新規レコードを記録（status は廃止）
-			const insertRes = await db.query(
-			`
-					INSERT INTO machine_status (machine_id, machine_start_time)
-					VALUES ($1, CURRENT_TIMESTAMP)
-					RETURNING machine_start_time
-			`,
-				[machineId]
-		);
+		// レスポンスはJST表記（+09:00）で返す
+		const toJstIso = (ts) => {
+			if (!ts) return null;
+			const s = String(ts).replace(' ', 'T').replace('Z', '');
+			return /[+-]\d{2}:\d{2}$/.test(s) ? s : `${s}+09:00`;
+		};
 
-			const startedAt = insertRes.rows[0].machine_start_time;
 		return NextResponse.json({
-			status: "稼働中",
-			started_at: new Date(startedAt).toISOString(),
+			started_at: toJstIso(startedAt),
 		});
 	} catch (err) {
 		console.error("API Error:", err);

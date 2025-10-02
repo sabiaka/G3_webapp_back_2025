@@ -10,7 +10,8 @@ import db from '@/lib/db';
  */
 export async function PATCH(request, { params }) {
   try {
-    const id = parseInt(params.id, 10);
+    const { id: idParam } = await params;
+    const id = parseInt(idParam, 10);
 
     // --- バリデーション ---
     // URLのIDが数値でない場合

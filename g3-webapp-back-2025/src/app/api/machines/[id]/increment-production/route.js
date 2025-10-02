@@ -65,31 +65,15 @@ export async function POST(request, ctx) {
         const rowDate = dateRes.rows[0].row_date;
 
         if (String(todayJst) !== String(rowDate)) {
-            // 日付が変わっていたら、新規行を作成して 1 から開始
-            let insertRes;
-            try {
-                insertRes = await db.query(
-                    `
-                  INSERT INTO machine_status (machine_id, status, machine_start_time, today_production_count)
-                  VALUES ($1, '稼働中', $2, 1)
+            // 日付が変わっていたら、新規行を作成して 1 から開始（status列なし前提）
+            const insertRes = await db.query(
+                `
+                  INSERT INTO machine_status (machine_id, machine_start_time, today_production_count)
+                  VALUES ($1, $2, 1)
                   RETURNING today_production_count
                 `,
-                    [machineId, machine_start_time]
-                );
-            } catch (e) {
-                if (e && e.code === '42703') { // status 列がない場合
-                    insertRes = await db.query(
-                        `
-                      INSERT INTO machine_status (machine_id, machine_start_time, today_production_count)
-                      VALUES ($1, $2, 1)
-                      RETURNING today_production_count
-                    `,
-                        [machineId, machine_start_time]
-                    );
-                } else {
-                    throw e;
-                }
-            }
+                [machineId, machine_start_time]
+            );
 
             return NextResponse.json({
                 today_production_count: insertRes.rows[0].today_production_count,
