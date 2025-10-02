@@ -1,0 +1,96 @@
+import { NextResponse } from 'next/server';
+import db from '@/lib/db';
+
+/**
+ * 指定されたIDの製造指示を更新するAPI (PUT)
+ * @description PUT /api/instructions/:id
+ */
+export async function PUT(request, { params }) {
+  try {
+    const id = params.id;
+    const body = await request.json();
+
+    if (Object.keys(body).length === 0) {
+      return NextResponse.json({ message: '更新するデータがありません。' }, { status: 400 });
+    }
+    
+    const keyToColumnMap = {
+      product_name: 'notification_item_name', size: 'notification_item_size',
+      color: 'notification_color', spring_type: 'notification_spring_type',
+      included_items: 'notification_accessories', shipping_method: 'notification_delivery_method',
+      destination: 'notification_delivery_address', remarks: 'notification_remarks',
+      quantity: 'notification_quantity', is_completed: 'is_completed'
+    };
+
+    const setClauses = [];
+    const queryParams = [];
+    let paramIndex = 1;
+
+    for (const key in body) {
+      if (keyToColumnMap[key]) {
+        setClauses.push(`${keyToColumnMap[key]} = $${paramIndex}`);
+        queryParams.push(body[key]);
+        paramIndex++;
+      }
+    }
+    
+    if (setClauses.length === 0) {
+        return NextResponse.json({ message: '更新可能なフィールドが含まれていません。' }, { status: 400 });
+    }
+    
+    queryParams.push(id);
+
+    const updateQuery = `
+      UPDATE notifications SET ${setClauses.join(', ')} WHERE notification_id = $${paramIndex}
+    `;
+
+    const result = await db.query(updateQuery, queryParams);
+
+    if (result.rowCount === 0) {
+        return NextResponse.json({ message: `ID ${id} の指示が見つかりません。` }, { status: 404 });
+    }
+    
+    const selectQuery = `
+      SELECT
+        n.notification_id AS id, pl.line_name AS line,
+        n.notification_item_name AS product_name, n.notification_item_size AS size,
+        n.notification_color AS color, n.notification_spring_type AS spring_type,
+        n.notification_accessories AS included_items, n.notification_delivery_method AS shipping_method,
+        n.notification_delivery_address AS destination, n.notification_remarks AS remarks,
+        n.notification_quantity AS quantity, n.is_completed,
+        n.notification_data_time AS created_at
+      FROM notifications AS n
+      JOIN production_lines AS pl ON n.notification_line_id = pl.line_id
+      WHERE n.notification_id = $1;
+    `;
+    
+    const updatedInstruction = await db.query(selectQuery, [id]);
+    return NextResponse.json(updatedInstruction.rows[0]);
+
+  } catch (error) {
+    console.error('API Error:', error);
+    return NextResponse.json({ message: 'サーバーでエラーが発生しました。' }, { status: 500 });
+  }
+}
+
+/**
+ * 指定されたIDの製造指示を削除するAPI (DELETE)
+ * @description DELETE /api/instructions/:id
+ */
+export async function DELETE(request, { params }) {
+  try {
+    const id = params.id;
+    const deleteQuery = 'DELETE FROM notifications WHERE notification_id = $1';
+    const result = await db.query(deleteQuery, [id]);
+
+    if (result.rowCount === 0) {
+      return NextResponse.json({ message: `ID ${id} の指示が見つかりません。` }, { status: 404 });
+    }
+    
+    return new NextResponse(null, { status: 204 });
+
+  } catch (error) {
+    console.error('API Error:', error);
+    return NextResponse.json({ message: 'サーバーでエラーが発生しました。' }, { status: 500 });
+  }
+}
