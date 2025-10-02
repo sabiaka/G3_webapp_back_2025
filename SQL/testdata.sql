@@ -120,13 +120,10 @@ INSERT INTO machine_production (machine_prod_hook_remaining, machine_prod_count)
 (4400, 10850);
 
 -- production_reports (生産数管理) テーブルへの仮データ挿入
-INSERT INTO production_reports (prodreport_date, prodreport_product_name, prodreport_plan_quantity, prodreport_actual_quantity, prodreport_achievement_rate, prodreport_defective_quantity, prodreport_employee_id, prodreport_remarks) VALUES
-('2025-07-23', '製品A', 300, 270, 90.00, 5, 2, '材料の入荷遅れにより計画未達。'),
-('2025-07-23', '製品B', 200, 200, 100.00, 2, 3, '計画通り完了。'),
-('2025-07-24', '製品A', 300, 310, 103.33, 3, 2, '計画を上回って生産。'),
-('2025-07-24', '製品B', 200, 195, 97.50, 1, 3, '塗料のトラブルで一時停止。'),
-('2025-07-24', '製品C', 500, 500, 100.00, 2, 4, '検査完了。');
-
+INSERT INTO production_reports (prodreport_date,prodreport_product_name,prodreport_plan_quantity,prodreport_actual_quantity,prodreport_achievement_rate,prodreport_defective_quantity,prodreport_employee_id,prodreport_remarks) VALUES
+('2025-10-02', 'テストA', 150, 148, 98.67, 2, 2, '若干遅延あり'),
+('2025-10-03', 'テストB', 200, 200, 100.00, 0, 4, NULL),
+('2025-10-04', 'テストC', 80, 79, 98.75, 1, 5, '傷があったため1つ破棄');
 
 
 --棚作成
