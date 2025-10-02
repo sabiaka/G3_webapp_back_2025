@@ -105,9 +105,20 @@ VALUES
 
 
 -- inspection_results (検査画像) テーブルへの仮データ挿入
-INSERT INTO inspection_results (inspection_status, inspection_trouble_info, inspection_image_path) VALUES
-('PASS', NULL, '/images/inspection/20250901_01.jpg'),
-('FAIL', '位置ずれ', '/images/inspection/20250901_02.jpg');
+INSERT INTO inspection_results (
+    inspection_camera_id,
+    inspection_product_id,
+    inspection_result,
+    inspection_reason,
+    inspection_image_path
+) VALUES 
+    ('A-main01', 'A-テスト', 'FAIL', '右下部に打痕あり', '/A-102-011.jpg'),
+    ('A-stitch01', 'A-テスト', 'PASS', NULL, '/A-102-012.jpg'),
+    ('A-stitch02', 'A-テスト', 'PASS', NULL, '/B-005-001.jpg'),
+    ('B-spring01', 'B-テスト', 'FAIL', '異物の付着を検出', '/A-102-013.jpg'),
+    ('B-spring02', 'B-テスト', 'FAIL', 'バネ取り付け角度規定外', '/B-005-002.jpg'),
+    ('B-spring03', 'B-テスト', 'PASS', NULL, '/A-102-014.jpg'),
+    ('B-spring04', 'B-テスト', 'PASS', NULL, '/B-005-003.jpg');
 
 
 
