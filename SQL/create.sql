@@ -127,7 +127,7 @@ CREATE TABLE production_reports (
     prodreport_actual_quantity INT NOT NULL,       -- 実績数量
     prodreport_achievement_rate DECIMAL(5,2),      -- 達成率（例: 95.00）
     prodreport_defective_quantity INT NOT NULL,    -- 不良数
-    prodreport_employee_id INT,                    -- 担当者ID（employeesテーブルの外部キー）
+    prodreport_employee_id INT,                    -- 担当者ID
     prodreport_remarks TEXT,                       -- 備考
     FOREIGN KEY (prodreport_employee_id) REFERENCES employees(employee_id)
 );
