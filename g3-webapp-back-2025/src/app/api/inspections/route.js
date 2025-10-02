@@ -26,9 +26,7 @@ export async function GET(request) {
 
     if (type) {
       whereClauses.push(`inspection_camera_id LIKE $${paramIndex++}`);
-      // ▼ 修正点: 部分一致から前方一致に変更 ▼
       queryParams.push(`${type}%`);
-      // ▲ 修正点 ▲
     }
 
     const whereString = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -42,6 +40,7 @@ export async function GET(request) {
     const logsQuery = `
       SELECT
         inspection_id,
+        inspection_camera_id AS camera_id, -- ▼ 追加 ▼
         inspection_captured_time AS captured_at,
         inspection_inspected_time AS inspected_at,
         inspection_product_id AS product_id,
