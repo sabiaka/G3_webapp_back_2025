@@ -97,16 +97,55 @@ CREATE TABLE machine_logs (
 );
 
 --【画像検査テーブル】
-CREATE TABLE inspection_results (
-    inspection_id SERIAL PRIMARY KEY,                                   -- 自動採番
-    inspection_camera_id VARCHAR(50) NOT NULL,                          -- カメラ名
-    inspection_product_id VARCHAR(50) NOT NULL,                         -- 製品名
-    inspection_result VARCHAR(50) NULL,                                 -- 検査結果（良品、不良など）
-    inspection_reason TEXT NULL,                                        -- 問題点詳細
-    inspection_image_path TEXT NOT NULL,                                -- 検査画像パス
-    inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 撮影日時
-    inspection_inspected_time TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP  -- 検査日時
+--CREATE TABLE inspection_results (
+--    inspection_id SERIAL PRIMARY KEY,                                   -- 自動採番
+--    inspection_camera_id VARCHAR(50) NOT NULL,                          -- カメラ名
+--    inspection_product_id VARCHAR(50) NOT NULL,                         -- 製品名
+--    inspection_result VARCHAR(50) NULL,                                 -- 検査結果（良品、不良など）
+--    inspection_reason TEXT NULL,                                        -- 問題点詳細
+--    inspection_image_path TEXT NOT NULL,                                -- 検査画像パス
+--    inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 撮影日時
+--    inspection_inspected_time TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP  -- 検査日時
+--);
+
+
+
+
+-- セクションの正規化（任意）
+CREATE TABLE inspection_sections (
+    section_id SERIAL PRIMARY KEY,                       -- セクションID（内部連番）
+    section_code VARCHAR(32) UNIQUE NOT NULL,            -- セクション内部コード（例: 'spring', 'alayer'）
+    section_name VARCHAR(64) NOT NULL                    -- セクション表示名（例: 'バネ留め', 'A層検査'）
 );
+
+-- ロット（製品ID等に相当）
+CREATE TABLE inspection_lots (
+    id BIGSERIAL PRIMARY KEY,                                       -- ロット内部ID（連番）
+    lot_id VARCHAR(64) NOT NULL,                                    -- ロットID（製品ID等、例: 'MAT-10001'）
+    section_code VARCHAR(32) NOT NULL,                              -- セクション内部コード（例: 'spring'）
+    captured_at TIMESTAMP WITH TIME ZONE NOT NULL,                  -- 検査代表時刻（最初/最後のいずれか）
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,  -- レコード作成日時
+    UNIQUE (lot_id)                                                 -- ロットIDは一意
+);
+
+-- カメラショット（1ロット内で複数可、同一camera_idで複数行OK）
+CREATE TABLE inspection_camera_shots (
+    id BIGSERIAL PRIMARY KEY,                                                   -- ショット内部ID（連番）
+    lot_id_ref BIGINT NOT NULL REFERENCES inspection_lots(id) ON DELETE CASCADE,-- ロット参照ID
+    camera_id VARCHAR(64) NOT NULL,                                             -- カメラID（例: 'B-spring01', 'A-main01'）
+    status VARCHAR(16) NOT NULL CHECK (status IN ('PASS','FAIL','MISSING')),    -- 判定ステータス
+    details TEXT NULL,                                                          -- 不良理由等（PASS時はNULL推奨）
+    image_path TEXT NULL,                                                       -- 画像パス（MISSING時はNULL可）
+    shot_seq INT NOT NULL DEFAULT 1,                                            -- 同一カメラ内の通番（1..n）
+    captured_at TIMESTAMP WITH TIME ZONE NULL                                   -- ショット撮影時刻
+);
+
+
+
+
+
+
+
 
 --【生産個数管理テーブル】
 CREATE TABLE machine_production (
