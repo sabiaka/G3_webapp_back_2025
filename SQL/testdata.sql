@@ -1,28 +1,33 @@
--- roles (権限) テーブルへの仮データ挿入
+-- 従業員管理API 設計書 rolesテーブルへの仮データ
 INSERT INTO roles (role_name, is_admin) VALUES
   ('管理者', TRUE),
   ('一般従業員', FALSE);
 
--- production_lines (担当ライン) テーブルへの仮データ挿入
+-- 従業員管理API 設計書 production_linesテーブルへの仮データ
 INSERT INTO production_lines (line_name) VALUES
   ('Aライン'),
   ('Bライン');
 
--- employees (従業員) テーブルへの仮データ挿入
--- パスワードは実際にはハッシュ化して保存してください
+-- 従業員管理API 設計書 employeesテーブルへの仮データ
+-- ※パスワードは実際にはハッシュ化して保存します
 INSERT INTO employees (employee_name,employee_user_id,employee_password,employee_is_active,employee_role_id,employee_line_id,employee_special_notes,employee_color_code) VALUES
 ('山田 太郎','t.yamada','123456',true,1,1,'フォークリフト免許保持','a3a8e6');
 
 
--- reports (日報) テーブルへの仮データ挿入
-INSERT INTO reports (report_employee_id, report_date, report_product_name, report_line_id, report_production_result, report_today_work, report_memo) VALUES
-(1, '2025-07-24', 'システム保守', 1, NULL, 'サーバーの定期メンテナンスを実施。', '特に問題なし。'),
-(2, '2025-07-24', '製品A', 1, 155, '製品Aの組立作業。', '部品の供給がスムーズだった。'),
-(3, '2025-07-24', '製品B', 2, 210, '製品Bの塗装作業。', '新人への指導を実施。'),
-(4, '2025-07-24', '製品C', 3, 500, '製品Cの外観検査。', '軽微な傷を2件発見。'),
-(5, '2025-07-24', '製品D', 4, 300, '製品Dの梱包および出荷準備。', '梱包材が残りわずか。');
 
--- priorities (優先度) テーブルへの仮データ挿入
+
+-- reports (日報) テーブルへの仮データ挿入
+--INSERT INTO reports (report_employee_id, report_date, report_product_name, report_line_id, report_production_result, report_today_work, report_memo) VALUES
+--(1, '2025-07-24', 'システム保守', 1, NULL, 'サーバーの定期メンテナンスを実施。', '特に問題なし。'),
+--(2, '2025-07-24', '製品A', 1, 155, '製品Aの組立作業。', '部品の供給がスムーズだった。'),
+--(3, '2025-07-24', '製品B', 2, 210, '製品Bの塗装作業。', '新人への指導を実施。'),
+--(4, '2025-07-24', '製品C', 3, 500, '製品Cの外観検査。', '軽微な傷を2件発見。'),
+--(5, '2025-07-24', '製品D', 4, 300, '製品Dの梱包および出荷準備。', '梱包材が残りわずか。');
+
+
+
+
+-- 製造出荷指示API 設計書 prioritiesテーブルへの仮データ
 INSERT INTO priorities (priority_label) VALUES
 ('至急対応'),
 ('通常対応'),
@@ -30,7 +35,7 @@ INSERT INTO priorities (priority_label) VALUES
 ('中'),
 ('低');
 
--- notifications (生産目標通知) テーブルへの仮データ挿入
+-- 製造出荷指示API 設計書 notificationsテーブルへの仮データ
 INSERT INTO notifications (
     notification_line_id,
     notification_quantity,
@@ -47,16 +52,16 @@ INSERT INTO notifications (
     is_completed
 ) VALUES (
     1,                       -- production_linesテーブルに存在するline_id
-    10,                       -- 数量
-    'テスト商品',          -- 商品名
-    '10x10',              -- サイズ
-    '白',                -- 色
-    '1.0mmポケットコイル',   -- バネの種類
-    '予備ネジ10個',              -- 付属品
-    'テスト便',              -- 配送方法
-    '東京都xx区1-2-3', -- 配送先住所
-    'テスト会社',               -- 配送会社（NULLも可）
-    'テスト',        -- 備考（NULLも可）
+    10,                      -- 数量
+    'テスト商品',             -- 商品名
+    '10x10',                 -- サイズ
+    '白',                    -- 色
+    '1.0mmポケットコイル',    -- バネの種類
+    '予備ネジ10個',           -- 付属品
+    'テスト便',               -- 配送方法
+    '東京都xx区1-2-3',        -- 配送先住所
+    'テスト会社',             -- 配送会社（NULLも可）
+    'テスト',                 -- 備考（NULLも可）
     1,                       -- prioritiesテーブルに存在するpriority_id
     false                    -- 完了状態 (true または false)
 );
@@ -64,7 +69,7 @@ INSERT INTO notifications (
 
 
 
--- machines (機械名) テーブルへの仮データ挿入
+-- 生産機械状況API 設計書 machinesテーブルへの仮データ挿入
 INSERT INTO machines (machine_name) VALUES
 ('プレス機Mk-I'),
 ('自動塗装機-02'),
@@ -72,20 +77,16 @@ INSERT INTO machines (machine_name) VALUES
 ('自動梱包機-X1'),
 ('特殊加工機-α');
 
--- machine_status (生産機械状況) テーブルへの仮データ挿入
-INSERT INTO machine_status (
-  machine_id, status, machine_last_inspection
-)
-VALUES
+-- 生産機械状況API 設計書 machine_statusテーブルへの仮データ
+INSERT INTO machine_status (machine_id, status, machine_last_inspection) VALUES
 (1, '稼働中', '2025-07-01'),
 (2, '停止中', '2025-07-20'),
 (3, '稼働中', '2025-06-15'),
 (4, '異常あり', '2025-05-10'),
 (5, 'メンテ中', '2025-07-22');
 
--- 【machine_logs（機械ログ履歴）】テスト用データ挿入（新スキーマ: machine_name, unit_id, timestamp, log_type, title, message）
-INSERT INTO machine_logs (machine_name, unit_id, timestamp, log_type, title, message)
-VALUES
+-- 生産機械状況API 設計書 machine_logsテーブルへの仮データ
+INSERT INTO machine_logs (machine_name, unit_id, timestamp, log_type, title, message) VALUES
 -- プレス機Mk-I（unit_id 1,2,3 想定）
 ('半自動表層バネどめ機', NULL, '2025-07-15 10:15:32', 'error',   'E-001: 非常停止ボタン作動', '非常停止が検知され、機械が即時停止。'),
 ('半自動表層バネどめ機', 2,    '2025-07-15 09:45:00', 'error',   'E-002: 残弾数 致命的低下', '弾数が致命的に少なく、運転継続不可。'),
@@ -104,47 +105,95 @@ VALUES
 ('半自動表層バネどめ機', NULL, '2025-07-17 08:00:00', 'info',    'I-001: 生産機械 通電（JETSON検知）', '');
 
 
+
+
 -- inspection_results (検査画像) テーブルへの仮データ挿入
-INSERT INTO inspection_results (
-    inspection_camera_id,
-    inspection_product_id,
-    inspection_result,
-    inspection_reason,
-    inspection_image_path
-) VALUES 
-    ('A-main01', 'A-テスト', 'FAIL', '右下部に打痕あり', '/A-102-011.jpg'),
-    ('A-stitch01', 'A-テスト', 'PASS', NULL, '/A-102-012.jpg'),
-    ('A-stitch02', 'A-テスト', 'PASS', NULL, '/B-005-001.jpg'),
-    ('B-spring01', 'B-テスト', 'FAIL', '異物の付着を検出', '/A-102-013.jpg'),
-    ('B-spring02', 'B-テスト', 'FAIL', 'バネ取り付け角度規定外', '/B-005-002.jpg'),
-    ('B-spring03', 'B-テスト', 'PASS', NULL, '/A-102-014.jpg'),
-    ('B-spring04', 'B-テスト', 'PASS', NULL, '/B-005-003.jpg');
+--INSERT INTO inspection_results (
+--    inspection_camera_id,
+--    inspection_product_id,
+--    inspection_result,
+--    inspection_reason,
+--    inspection_image_path
+--) VALUES 
+--    ('A-main01', 'A-テスト', 'FAIL', '右下部に打痕あり', '/A-102-011.jpg'),
+--    ('A-stitch01', 'A-テスト', 'PASS', NULL, '/A-102-012.jpg'),
+--    ('A-stitch02', 'A-テスト', 'PASS', NULL, '/B-005-001.jpg'),
+--    ('B-spring01', 'B-テスト', 'FAIL', '異物の付着を検出', '/A-102-013.jpg'),
+--    ('B-spring02', 'B-テスト', 'FAIL', 'バネ取り付け角度規定外', '/B-005-002.jpg'),
+--    ('B-spring03', 'B-テスト', 'PASS', NULL, '/A-102-014.jpg'),
+--    ('B-spring04', 'B-テスト', 'PASS', NULL, '/B-005-003.jpg');
+
+
+
+
+--画像検査API設計書（Re:仕様変更）inspection_sections テーブルへのINSERT文
+INSERT INTO inspection_sections (section_code, section_name) VALUES
+('spring', 'バネ留め'),
+('alayer', 'A層検査');
+
+--画像検査API設計書（Re:仕様変更）inspection_lots テーブルへのINSERT文
+INSERT INTO inspection_lots (lot_id, section_code, captured_at) VALUES
+('MAT-10001', 'spring', '2025-10-07 13:00:00+09'),
+('MAT-10002', 'alayer', '2025-10-07 13:05:00+09'),
+('MAT-10003', 'spring', '2025-10-07 13:10:00+09');
+
+--画像検査API設計書（Re:仕様変更）inspection_camera_shots テーブルへのINSERT文
+--ケース1: 正常(PASS)と異常(FAIL)が混在するロット
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, captured_at) VALUES
+-- 1台目のカメラは正常
+((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'S-CAM-01', 'PASS', NULL, '/images/mat10001_scam01.jpg', '2025-10-07 12:59:58+09'),
+-- 2台目のカメラは異常
+((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'S-CAM-02', 'FAIL', '異物混入', '/images/mat10001_scam02.jpg', '2025-10-07 13:00:01+09');
+
+--画像検査API設計書（Re:仕様変更）inspection_camera_shots テーブルへのINSERT文
+--ケース2: 撮影失敗(MISSING)を含むロット
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, captured_at) VALUES
+-- メインカメラは正常
+((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'A-CAM-MAIN', 'PASS', NULL, '/images/mat10002_acam_main.jpg', '2025-10-07 13:05:00+09'),
+-- サブカメラは撮影失敗
+((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'A-CAM-SUB', 'MISSING', '通信エラー', NULL, '2025-10-07 13:05:02+09');
+
+--画像検査API設計書（Re:仕様変更）inspection_camera_shots テーブルへのINSERT文
+--ケース3: 同じカメラで複数回撮影するロット
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+-- 1台目のカメラの1回目の撮影
+((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10003'), 'S-CAM-01', 'PASS', NULL, '/images/mat10003_scam01_seq1.jpg', 1, '2025-10-07 13:09:59+09'),
+-- 1台目のカメラの2回目の撮影
+((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10003'), 'S-CAM-01', 'PASS', NULL, '/images/mat10003_scam01_seq2.jpg', 2, '2025-10-07 13:10:00+09'),
+-- 2台目のカメラの撮影
+((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10003'), 'S-CAM-02', 'PASS', NULL, '/images/mat10003_scam02.jpg', 1, '2025-10-07 13:10:01+09');
+
 
 
 
 -- machine_production (ホックリング残数・生産数) テーブルへの仮データ挿入
-INSERT INTO machine_production (machine_prod_hook_remaining, machine_prod_count) VALUES
-(5000, 10250),
-(4850, 10400),
-(4700, 10550),
-(4550, 10700),
-(4400, 10850);
+--INSERT INTO machine_production (machine_prod_hook_remaining, machine_prod_count) VALUES
+--(5000, 10250),
+--(4850, 10400),
+--(4700, 10550),
+--(4550, 10700),
+--(4400, 10850);
 
--- production_reports (生産数管理) テーブルへの仮データ挿入
+
+
+
+-- 生産数管理API 設計書 production_reportsテーブルへの仮データ
 INSERT INTO production_reports (prodreport_date,prodreport_product_name,prodreport_plan_quantity,prodreport_actual_quantity,prodreport_achievement_rate,prodreport_defective_quantity,prodreport_employee_id,prodreport_remarks) VALUES
 ('2025-10-02', 'テストA', 150, 148, 98.67, 2, 2, '若干遅延あり'),
 ('2025-10-03', 'テストB', 200, 200, 100.00, 0, 4, NULL),
 ('2025-10-04', 'テストC', 80, 79, 98.75, 1, 5, '傷があったため1つ破棄');
 
 
---棚作成
+
+
+--部品在庫管理API 設計書 棚作成用の仮データ
 INSERT INTO racks (rack_name, rows, cols) VALUES
 ('スプリング・小物資材ラック', 3, 4);
 
---上記rack_id=1('スプリング・小物資材ラック')に部品追加
+--部品在庫管理API 設計書　上記rack_id=1に部品追加
 INSERT INTO slots (rack_id, slot_identifier, part_name, part_model_number, quantity, color_code) VALUES
 (1, 'A-1', 'ポケットコイル', 'PC-S-H20', 25, '#FF5733');
 
---空スロット用
+--部品在庫管理API 設計書 空スロット用
 INSERT INTO slots (rack_id, slot_identifier)VALUES
 (1, 'A-2');
