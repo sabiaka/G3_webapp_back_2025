@@ -7,7 +7,7 @@ import db from '@/lib/db';
  */
 export async function PUT(request, { params }) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const body = await request.json();
 
     if (Object.keys(body).length === 0) {
@@ -79,7 +79,7 @@ export async function PUT(request, { params }) {
  */
 export async function DELETE(request, { params }) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const deleteQuery = 'DELETE FROM notifications WHERE notification_id = $1';
     const result = await db.query(deleteQuery, [id]);
 

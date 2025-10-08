@@ -11,7 +11,7 @@ import pool from '@/lib/db';
 export async function GET(request, { params }) {
   try {
     // 1. URLから動的なロットIDを取得
-    const { lot_id } = params;
+    const { lot_id } = await params;
 
     if (!lot_id) {
       return NextResponse.json(
