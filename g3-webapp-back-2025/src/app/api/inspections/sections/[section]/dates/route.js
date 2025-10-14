@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 
 export async function GET(request, { params }) {
   try {
-    const { section } = params;
+    const { section } = await params;
 
     if (!section) {
       return NextResponse.json(
