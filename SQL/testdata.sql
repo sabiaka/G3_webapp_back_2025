@@ -219,116 +219,50 @@ INSERT INTO inspection_lots (lot_id, section_code, captured_at) VALUES
 ON CONFLICT (lot_id) DO NOTHING;
 
 -- inspection_camera_shots
--- MAT-09030 (shots from original MAT-09030-01)
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-09030'), 'B-spring01', 'PASS', NULL, 'MAT-09030-01_B-spring01-01.jpg', 1, '2025-09-30T09:15:12.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-09030'), 'B-spring02', 'PASS', NULL, 'MAT-09030-01_B-spring02-01.jpg', 1, '2025-09-30T09:15:12.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-09030'), 'B-spring03', 'PASS', NULL, 'MAT-09030-01_B-spring03-01.jpg', 1, '2025-09-30T09:15:12.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-09030'), 'B-spring04', 'PASS', NULL, 'MAT-09030-01_B-spring04-01.jpg', 1, '2025-09-30T09:15:12.000Z');
+-- Lot ID: 1 (MAT-09030 / spring)
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+(1, 'B-spring01', 'PASS', NULL, 'MAT-09030_B-spring01.jpg', 1, '2025-10-01 09:15:12+00'),
+(1, 'B-spring02', 'PASS', NULL, 'MAT-09030_B-spring02.jpg', 1, '2025-10-01 09:15:12+00'),
+(1, 'B-spring03', 'PASS', NULL, 'MAT-09030_B-spring03.jpg', 1, '2025-10-01 09:15:12+00');
 
--- MAT-09030 (shots from original MAT-09030-02)
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-09030'), 'B-spring01', 'FAIL', 'バネ外れ', 'MAT-09030-02_B-spring01-01.jpg', 2, '2025-09-30T10:45:45.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-09030'), 'B-spring02', 'PASS', NULL, 'MAT-09030-02_B-spring02-01.jpg', 2, '2025-09-30T10:45:45.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-09030'), 'B-spring03', 'PASS', NULL, 'MAT-09030-02_B-spring03-01.jpg', 2, '2025-09-30T10:45:45.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-09030'), 'B-spring04', 'PASS', NULL, 'MAT-09030-02_B-spring04-01.jpg', 2, '2025-09-30T10:45:45.000Z');
+-- Lot ID: 2 (LOLL-09030 / alayer)
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+(2, 'A-main01', 'FAIL', 'A層ヨゴレ', 'LOLL-09030_A-main01.jpg', 1, '2025-10-01 11:05:30+00'),
+(2, 'A-stitch01', 'PASS', NULL, 'LOLL-09030_A-stitch01.jpg', 1, '2025-10-01 11:05:30+00'),
+(2, 'A-stitch02', 'PASS', NULL, 'LOLL-09030_A-stitch02.jpg', 1, '2025-10-01 11:05:30+00');
 
--- LOLL-09030 (shots from original LOLL-09030-01)
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-09030'), 'A-main01', 'FAIL', 'A層ヨゴレ', 'LOLL-09030-01_A-main01-01.jpg', 1, '2025-09-30T11:05:30.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-09030'), 'A-stitch01', 'PASS', NULL, 'LOLL-09030-01_A-stitch01-01.jpg', 1, '2025-09-30T11:05:30.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-09030'), 'A-stitch02', 'PASS', NULL, 'LOLL-09030-01_A-stitch02-01.jpg', 1, '2025-09-30T11:05:30.000Z');
+-- Lot ID: 3 (MAT-10001 / spring)
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+(3, 'B-spring01', 'FAIL', 'バネ取り付け角度規定外', 'MAT-10001_B-spring01.jpg', 1, '2025-10-01 17:47:53.427+00'),
+(3, 'B-spring02', 'PASS', NULL, 'MAT-10001_B-spring02.jpg', 1, '2025-10-01 17:47:53.427+00'),
+(3, 'B-spring03', 'PASS', NULL, 'MAT-10001_B-spring03.jpg', 1, '2025-10-01 17:47:53.427+00');
 
--- LOLL-09030 (shots from original LOLL-09030-02)
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-09030'), 'A-main01', 'PASS', NULL, 'LOLL-09030-02_A-main01-01.jpg', 2, '2025-09-30T13:22:10.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-09030'), 'A-stitch01', 'PASS', NULL, 'LOLL-09030-02_A-stitch01-01.jpg', 2, '2025-09-30T13:22:10.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-09030'), 'A-stitch02', 'PASS', NULL, 'LOLL-09030-02_A-stitch02-01.jpg', 2, '2025-09-30T13:22:10.000Z');
+-- Lot ID: 4 (MAT-10002 / spring)
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+(4, 'B-spring01', 'PASS', NULL, 'MAT-10002_B-spring01.jpg', 1, '2025-10-01 17:50:12.123+00'),
+(4, 'B-spring02', 'PASS', NULL, 'MAT-10002_B-spring02.jpg', 1, '2025-10-01 17:50:12.123+00'),
+(4, 'B-spring03', 'PASS', NULL, 'MAT-10002_B-spring03.jpg', 1, '2025-10-01 17:50:12.123+00');
 
--- MAT-10001 (multiple shots per camera)
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'B-spring01', 'FAIL', 'バネ取り付け角度規定外', 'MAT-10001_B-spring01-01.jpg', 1, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'B-spring01', 'PASS', NULL, 'MAT-10001_B-spring01-02.jpg', 2, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'B-spring02', 'FAIL', 'バネ取り付け角度規定外', 'MAT-10001_B-spring02-01.jpg', 1, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'B-spring02', 'PASS', NULL, 'MAT-10001_B-spring02-02.jpg', 2, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'B-spring03', 'PASS', NULL, 'MAT-10001_B-spring03-01.jpg', 1, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'B-spring03', 'PASS', NULL, 'MAT-10001_B-spring03-02.jpg', 2, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'B-spring04', 'PASS', NULL, 'MAT-10001_B-spring04-01.jpg', 1, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10001'), 'B-spring04', 'PASS', NULL, 'MAT-10001_B-spring04-02.jpg', 2, '2025-10-01T17:47:53.427Z');
+-- Lot ID: 5 (MAT-10003 / spring)
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+(5, 'B-spring01', 'PASS', NULL, 'MAT-10003_B-spring01.jpg', 1, '2025-10-01 17:52:30.555+00'),
+(5, 'B-spring02', 'FAIL', 'バネ外れ', 'MAT-10003_B-spring02.jpg', 1, '2025-10-01 17:52:30.555+00'),
+(5, 'B-spring03', 'PASS', NULL, 'MAT-10003_B-spring03.jpg', 1, '2025-10-01 17:52:30.555+00');
 
--- MAT-10002
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'B-spring01', 'PASS', NULL, 'MAT-10002_B-spring01-01.jpg', 1, '2025-10-01T17:50:12.123Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'B-spring02', 'PASS', NULL, 'MAT-10002_B-spring02-01.jpg', 1, '2025-10-01T17:50:12.123Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'B-spring03', 'PASS', NULL, 'MAT-10002_B-spring03-01.jpg', 1, '2025-10-01T17:50:12.123Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'B-spring04', 'PASS', NULL, 'MAT-10002_B-spring04-01.jpg', 1, '2025-10-01T17:50:12.123Z');
+-- Lot ID: 6 (LOLL-10001 / alayer)
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+(6, 'A-main01', 'PASS', NULL, 'LOLL-10001_A-main01.jpg', 1, '2025-10-01 17:47:53.427+00'),
+(6, 'A-stitch01', 'PASS', NULL, 'LOLL-10001_A-stitch01.jpg', 1, '2025-10-01 17:47:53.427+00'),
+(6, 'A-stitch02', 'FAIL', '糸ほつれ', 'LOLL-10001_A-stitch02.jpg', 1, '2025-10-01 17:47:53.427+00');
 
--- MAT-10003
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10003'), 'B-spring01', 'FAIL', 'バネ外れ', 'MAT-10003_B-spring01-01.jpg', 1, '2025-10-01T17:52:30.555Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10003'), 'B-spring02', 'PASS', NULL, 'MAT-10003_B-spring02-01.jpg', 1, '2025-10-01T17:52:30.555Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10003'), 'B-spring03', 'PASS', NULL, 'MAT-10003_B-spring03-01.jpg', 1, '2025-10-01T17:52:30.555Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10003'), 'B-spring04', 'PASS', NULL, 'MAT-10003_B-spring04-01.jpg', 1, '2025-10-01T17:52:30.555Z');
+-- Lot ID: 7 (LOLL-10002 / alayer)
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+(7, 'A-main01', 'PASS', NULL, 'LOLL-10002_A-main01.jpg', 1, '2025-10-01 17:49:10.789+00'),
+(7, 'A-stitch01', 'PASS', NULL, 'LOLL-10002_A-stitch01.jpg', 1, '2025-10-01 17:49:10.789+00'),
+(7, 'A-stitch02', 'PASS', NULL, 'LOLL-10002_A-stitch02.jpg', 1, '2025-10-01 17:49:10.789+00');
 
--- LOLL-10001 (multiple shots)
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10001'), 'A-main01', 'FAIL', 'A層ヨゴレ', 'LOLL-10001_A-main01-01.jpg', 1, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10001'), 'A-main01', 'FAIL', 'ゴミ付着', 'LOLL-10001_A-main01-02.jpg', 2, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10001'), 'A-main01', 'PASS', NULL, 'LOLL-10001_A-main01-03.jpg', 3, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10001'), 'A-main01', 'PASS', NULL, 'LOLL-10001_A-main01-04.jpg', 4, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10001'), 'A-stitch01', 'PASS', NULL, 'LOLL-10001_A-stitch01-01.jpg', 1, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10001'), 'A-stitch01', 'FAIL', '糸ほつれ', 'LOLL-10001_A-stitch01-02.jpg', 2, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10001'), 'A-stitch02', 'PASS', NULL, 'LOLL-10001_A-stitch02-03.jpg', 1, '2025-10-01T17:47:53.427Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10001'), 'A-stitch02', 'PASS', NULL, 'LOLL-10001_A-stitch02-04.jpg', 2, '2025-10-01T17:47:53.427Z');
-
--- LOLL-10002
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-main01', 'PASS', NULL, 'LOLL-10002_A-main01-01.jpg', 1, '2025-10-01T17:49:10.789Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-stitch01', 'PASS', NULL, 'LOLL-10002_A-stitch01-01.jpg', 1, '2025-10-01T17:49:10.789Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-stitch02', 'PASS', NULL, 'LOLL-10002_A-stitch02-01.jpg', 1, '2025-10-01T17:49:10.789Z');
-
--- LOLL-10003
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10003'), 'A-main01', 'FAIL', 'A層ヨゴレ', 'LOLL-10003_A-main01-01.jpg', 1, '2025-10-01T17:51:05.321Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10003'), 'A-stitch01', 'PASS', NULL, 'LOLL-10003_A-stitch01-01.jpg', 1, '2025-10-01T17:51:05.321Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10003'), 'A-stitch02', 'FAIL', '糸ほつれ', 'LOLL-10003_A-stitch02-01.jpg', 1, '2025-10-01T17:51:05.321Z');
-
--- MAT-10002-01
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'B-spring01', 'PASS', NULL, 'MAT-10002-01_B-spring01-01.jpg', 1, '2025-10-02T01:10:00.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'B-spring02', 'PASS', NULL, 'MAT-10002-01_B-spring02-01.jpg', 1, '2025-10-02T01:10:00.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002-01'), 'B-spring03', 'PASS', NULL, 'MAT-10002-01_B-spring03-01.jpg', 1, '2025-10-02T01:10:00.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002-01'), 'B-spring04', 'PASS', NULL, 'MAT-10002-01_B-spring04-01.jpg', 1, '2025-10-02T01:10:00.000Z');
-
--- MAT-10002-02
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'B-spring01', 'PASS', NULL, 'MAT-10002-02_B-spring01-01.jpg', 2, '2025-10-02T03:30:45.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002'), 'B-spring02', 'FAIL', 'バネ取り付け角度規定外', 'MAT-10002-02_B-spring02-01.jpg', 2, '2025-10-02T03:30:45.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002-02'), 'B-spring03', 'PASS', NULL, 'MAT-10002-02_B-spring03-01.jpg', 1, '2025-10-02T03:30:45.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'MAT-10002-02'), 'B-spring04', 'PASS', NULL, 'MAT-10002-02_B-spring04-01.jpg', 1, '2025-10-02T03:30:45.000Z');
-
--- LOLL-10002-01
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-main01', 'PASS', NULL, 'LOLL-10002-01_A-main01-01.jpg', 1, '2025-10-02T04:00:00.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-stitch01', 'PASS', NULL, 'LOLL-10002-01_A-stitch01-01.jpg', 1, '2025-10-02T04:00:00.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-stitch02', 'PASS', NULL, 'LOLL-10002-01_A-stitch02-01.jpg', 1, '2025-10-02T04:00:00.000Z');
-
--- LOLL-10002-02
-INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at)
-VALUES
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-main01', 'FAIL', 'ゴミ付着', 'LOLL-10002-02_A-main01-01.jpg', 2, '2025-10-02T05:45:15.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-stitch01', 'PASS', NULL, 'LOLL-10002-02_A-stitch01-01.jpg', 2, '2025-10-02T05:45:15.000Z'),
-((SELECT id FROM inspection_lots WHERE lot_id = 'LOLL-10002'), 'A-stitch02', 'PASS', NULL, 'LOLL-10002-02_A-stitch02-01.jpg', 2, '2025-10-02T05:45:15.000Z');
+-- Lot ID: 8 (LOLL-10003 / alayer)
+INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, image_path, shot_seq, captured_at) VALUES
+(8, 'A-main01', 'FAIL', 'ゴミ付着', 'LOLL-10003_A-main01.jpg', 1, '2025-10-01 17:51:05.321+00'),
+(8, 'A-stitch01', 'PASS', NULL, 'LOLL-10003_A-stitch01.jpg', 1, '2025-10-01 17:51:05.321+00'),
+(8, 'A-stitch02', 'FAIL', '糸ほつれ', 'LOLL-10003_A-stitch02.jpg', 1, '2025-10-01 17:51:05.321+00');
