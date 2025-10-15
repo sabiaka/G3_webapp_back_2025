@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 
 /**
  * 指定したセクションと日付の検査サマリーを取得するAPI
- * (inspection_camera_shots の日付を基準に検索)
+ * (UTCの日付を基準に検索)
  */
 export async function GET(request) {
   try {
@@ -31,14 +31,14 @@ export async function GET(request) {
       }
       targetDate = dateParam;
     } else {
-      // UTCの「本日」をデフォルト値とする
+      // JST変換せず、UTCの「本日」をデフォルト値とする
       targetDate = new Date().toISOString().split('T')[0];
     }
 
     const queryParams = [sectionCode, targetDate];
 
     // 3. データベースにクエリを実行
-    // クエリ1: 良品数と不良品数を集計
+    // ▼ WHERE句で ::date を使い、UTC日付で比較します
     const summaryQuery = `
       SELECT
         COUNT(*) FILTER (WHERE s.status = 'PASS') AS pass_count,
@@ -49,14 +49,14 @@ export async function GET(request) {
         inspection_lots l ON s.lot_id_ref = l.id
       WHERE
         l.section_code = $1 AND
-        -- ▼変更点▼ inspection_camera_shots(s) の日付を見るように変更
-        s.captured_at::date = $2;
+        (s.captured_at at time zone 'UTC')::date = $2;
     `;
 
-    // クエリ2: 不良理由とその件数を集計
     const reasonsQuery = `
       SELECT
         s.details AS reason,
+        -- captured_atをUTC基準の日付文字列 'YYYY-MM-DD' に変換して取得
+        TO_CHAR(s.captured_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
         COUNT(*) AS count
       FROM
         inspection_camera_shots s
@@ -64,21 +64,26 @@ export async function GET(request) {
         inspection_lots l ON s.lot_id_ref = l.id
       WHERE
         l.section_code = $1 AND
-        -- ▼変更点▼ inspection_camera_shots(s) の日付を見るように変更
-        s.captured_at::date = $2 AND
+        -- summaryQuery と条件を合わせるため、こちらもUTC基準で比較
+        (s.captured_at AT TIME ZONE 'UTC')::date = $2 AND
         s.status = 'FAIL' AND
         s.details IS NOT NULL
       GROUP BY
-        s.details
+        s.details,
+        date -- SELECT句のエイリアス 'date' を使う
       ORDER BY
         count DESC;
     `;
 
-    // 2つのクエリを並列で実行
     const [summaryResult, reasonsResult] = await Promise.all([
       pool.query(summaryQuery, queryParams),
       pool.query(reasonsQuery, queryParams)
     ]);
+
+    console.log('summaryQuery:', queryParams);
+    console.log('reasonsQuery:', queryParams);
+    console.log('summaryResult:', summaryResult);
+    console.log('reasonsResult:', reasonsResult);
 
     // 4. レスポンスデータを組み立てる
     const passCount = parseInt(summaryResult.rows[0]?.pass_count || '0', 10);
