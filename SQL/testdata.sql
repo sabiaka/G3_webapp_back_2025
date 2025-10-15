@@ -35,36 +35,90 @@ INSERT INTO priorities (priority_label) VALUES
 ('中'),
 ('低');
 
--- 製造出荷指示API 設計書 notificationsテーブルへの仮データ
+-- 製造出荷指示API 設計書 notificationsテーブルへの仮データ（1文で一括挿入）
+WITH upsert_lines AS (
+  INSERT INTO production_lines (line_name)
+  VALUES ('ボトム'), ('マット')
+  ON CONFLICT (line_name) DO NOTHING
+  RETURNING line_id, line_name
+), lines AS (
+  -- 追加された行と既存行をマージ
+  SELECT line_id, line_name FROM upsert_lines
+  UNION ALL
+  SELECT pl.line_id, pl.line_name
+  FROM production_lines pl
+  WHERE pl.line_name IN ('ボトム','マット')
+), data AS (
+  -- ユーザー指定の8件データをまとめて定義
+  SELECT 
+    (SELECT line_id FROM lines WHERE line_name = 'ボトム') AS line_id,
+    1::INT AS quantity,
+    '木枠'::VARCHAR(50) AS item_name,
+    '1200x1950x170'::VARCHAR(50) AS item_size,
+    'こげ茶'::VARCHAR(50) AS color,
+    '2R/M8脚'::VARCHAR(50) AS spring_type,
+    ''::VARCHAR(50) AS accessories,
+    '㈱西'::VARCHAR(50) AS delivery_method,
+    'フラワーホテル'::VARCHAR(100) AS delivery_address,
+    NULL::VARCHAR(50) AS delivery_company,
+    ''::TEXT AS remarks,
+    1::INT AS priority_id,
+    FALSE AS is_completed,
+    '2025-04-23T10:00:00Z'::TIMESTAMP AS data_time
+  UNION ALL
+  SELECT (SELECT line_id FROM lines WHERE line_name = 'ボトム'), 1,
+    '木枠','1200x1950x170','こげ茶','2R/M8脚','', '㈱濃', 'グリーンホテル北上', NULL, '', 1, FALSE, '2025-04-23T15:30:00Z'::TIMESTAMP
+  UNION ALL
+  SELECT (SELECT line_id FROM lines WHERE line_name = 'マット'), 1,
+    'マット','1200x1950x200 SD','GMBE','平/1.9','西川仕様 / 西川アイロンシール', '西', 'フラワーホテル / ㈱西川', NULL, '', 1, FALSE, '2025-04-23T15:30:00Z'::TIMESTAMP
+  UNION ALL
+  SELECT (SELECT line_id FROM lines WHERE line_name = 'マット'), 1,
+    'マット','1200x1950x200 SD','GMBE','平/1.9','西川仕様 / 西川アイロンシール', '㈱濃', 'グリーンホテル北上 / ㈱西川', NULL, '', 1, FALSE, '2025-04-23T15:30:00Z'::TIMESTAMP
+  UNION ALL
+  SELECT (SELECT line_id FROM lines WHERE line_name = 'マット'), 1,
+    'サポート','80巾','5cm','', '', 'Amazon', '福岡県 小都 / Amazon', NULL, '', 1, FALSE, '2025-04-23T15:30:00Z'::TIMESTAMP
+  UNION ALL
+  SELECT (SELECT line_id FROM lines WHERE line_name = 'マット'), 2,
+    '天の羽衣','', '', '', '', '夜', '名古屋 / Amazon / オアシス便', NULL, '', 1, FALSE, '2025-04-23T15:30:00Z'::TIMESTAMP
+  UNION ALL
+  SELECT (SELECT line_id FROM lines WHERE line_name = 'マット'), 8,
+    'マット','', '', '', '', '積', '名古屋 / Amazon / オアシス便', NULL, '', 1, FALSE, '2025-04-23T15:30:00Z'::TIMESTAMP
+  UNION ALL
+  SELECT (SELECT line_id FROM lines WHERE line_name = 'マット'), 37,
+    '木枠','', '', '', '', '', '名古屋 / Amazon / オアシス便', NULL, '', 1, FALSE, '2025-04-23T15:30:00Z'::TIMESTAMP
+)
 INSERT INTO notifications (
-    notification_line_id,
-    notification_quantity,
-    notification_item_name,
-    notification_item_size,
-    notification_color,
-    notification_spring_type,
-    notification_accessories,
-    notification_delivery_method,
-    notification_delivery_address,
-    notification_delivery_company,
-    notification_remarks,
-    notification_priority_id,
-    is_completed
-) VALUES (
-    1,                       -- production_linesテーブルに存在するline_id
-    10,                      -- 数量
-    'テスト商品',             -- 商品名
-    '10x10',                 -- サイズ
-    '白',                    -- 色
-    '1.0mmポケットコイル',    -- バネの種類
-    '予備ネジ10個',           -- 付属品
-    'テスト便',               -- 配送方法
-    '東京都xx区1-2-3',        -- 配送先住所
-    'テスト会社',             -- 配送会社（NULLも可）
-    'テスト',                 -- 備考（NULLも可）
-    1,                       -- prioritiesテーブルに存在するpriority_id
-    false                    -- 完了状態 (true または false)
-);
+  notification_line_id,
+  notification_quantity,
+  notification_item_name,
+  notification_item_size,
+  notification_color,
+  notification_spring_type,
+  notification_accessories,
+  notification_delivery_method,
+  notification_delivery_address,
+  notification_delivery_company,
+  notification_remarks,
+  notification_priority_id,
+  is_completed,
+  notification_data_time
+)
+SELECT 
+  line_id,
+  quantity,
+  item_name,
+  item_size,
+  color,
+  spring_type,
+  accessories,
+  delivery_method,
+  delivery_address,
+  delivery_company,
+  remarks,
+  priority_id,
+  is_completed,
+  data_time
+FROM data;
 
 
 
