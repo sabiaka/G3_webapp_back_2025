@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
 /**
- * 利用可能な日付一覧を返すAPI
+ * 利用可能な日付ごとの件数一覧を返すAPI
  * GET /api/instructions/available-dates
  *
  * クエリ:
  * - limit: 返却件数の上限（省略可 / 正の整数）
  *
  * レスポンス例:
- * ["2025-08-01", "2025-08-03", "2025-08-04"]
+ * [{ "date": "2025-08-04", "count": 12 }, { "date": "2025-08-03", "count": 7 }]
  */
 export async function GET(request) {
     try {
@@ -22,10 +22,12 @@ export async function GET(request) {
 
         // 既定では全件（通知が存在する全日付）。必要に応じて他条件を拡張予定。
 
-        // ベースSQL: サーバー側タイムゾーン（日単位）に正規化されたユニーク日付
+        // ベースSQL: サーバー側タイムゾーン（日単位）に正規化されたユニーク日付と件数
         // セッションは JST 固定のため、 ::date で日付化すれば JST 基準となる
-                let sql = `
-            SELECT TO_CHAR(n.notification_data_time::date, 'YYYY-MM-DD') AS d
+        let sql = `
+            SELECT
+                TO_CHAR(n.notification_data_time::date, 'YYYY-MM-DD') AS d,
+                COUNT(*) AS c
             FROM notifications n
         `;
 
@@ -33,7 +35,7 @@ export async function GET(request) {
             sql += ' WHERE ' + whereClauses.join(' AND ');
         }
 
-        sql += ' GROUP BY d ORDER BY d DESC';
+    sql += ' GROUP BY d ORDER BY d DESC';
 
         // limit 指定があれば付与
         if (limitParam !== null) {
@@ -48,11 +50,11 @@ export async function GET(request) {
             params.push(limit);
         }
 
-        const { rows } = await db.query(sql, params);
-        // pg は DATE 型を文字列(YYYY-MM-DD)として返すため、そのまま返却
-        const dates = rows.map((r) => r.d);
+    const { rows } = await db.query(sql, params);
+    // 文字列化された日付と件数をオブジェクト配列で返却
+    const result = rows.map((r) => ({ date: r.d, count: Number(r.c) }));
 
-        return NextResponse.json(dates);
+    return NextResponse.json(result);
     } catch (error) {
         console.error('API Error (/api/instructions/available-dates):', error);
         return NextResponse.json(
