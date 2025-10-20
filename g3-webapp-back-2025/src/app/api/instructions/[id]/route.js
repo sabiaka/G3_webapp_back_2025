@@ -26,6 +26,21 @@ export async function PUT(request, { params }) {
     const queryParams = [];
     let paramIndex = 1;
 
+    // 作成日時の任意更新（created_at または notification_data_time）
+    const requestedTimestamp = body.created_at ?? body.notification_data_time ?? null;
+    if (requestedTimestamp !== null) {
+      const parsed = Date.parse(requestedTimestamp);
+      if (isNaN(parsed)) {
+        return NextResponse.json(
+          { message: '作成日時は ISO 8601（例: 2025-01-02T08:30:00+09:00）または YYYY-MM-DD 形式で指定してください。' },
+          { status: 400 }
+        );
+      }
+      setClauses.push(`notification_data_time = $${paramIndex}`);
+      queryParams.push(requestedTimestamp);
+      paramIndex++;
+    }
+
     for (const key in body) {
       if (keyToColumnMap[key]) {
         setClauses.push(`${keyToColumnMap[key]} = $${paramIndex}`);
