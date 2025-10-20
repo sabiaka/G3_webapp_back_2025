@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
-import bcrypt from 'bcrypt';
 
 /**
  * 製造指示リストを取得するAPI (GET)
  * @description GET /api/instructions
- * @param request - q, line, is_completed による絞り込み検索に対応
+ * @param request - q, line, is_completed, date(当日一致), start_date/end_date(範囲) による絞り込み検索に対応
  */
 export async function GET(request) {
   try {
@@ -13,6 +12,9 @@ export async function GET(request) {
     const q = searchParams.get('q');
     const line = searchParams.get('line');
     const is_completed = searchParams.get('is_completed');
+  const date = searchParams.get('date');       // 作成日（当日一致）
+  const start_date = searchParams.get('start_date'); // 作成日（以降）
+  const end_date = searchParams.get('end_date');     // 作成日（以前）
 
     // ベースとなるクエリ
     let query = `
@@ -59,6 +61,47 @@ export async function GET(request) {
       paramIndex++;
     }
 
+    // 日付形式チェック用
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+    // ?date=YYYY-MM-DD (当日一致)
+    if (date) {
+      if (!datePattern.test(date)) {
+        return NextResponse.json(
+          { message: 'date は YYYY-MM-DD 形式で指定してください。' },
+          { status: 400 }
+        );
+      }
+      whereClauses.push(`n.notification_data_time::date = $${paramIndex}`);
+      queryParams.push(date);
+      paramIndex++;
+    } else {
+      // ?start_date=YYYY-MM-DD (その日以降)
+      if (start_date) {
+        if (!datePattern.test(start_date)) {
+          return NextResponse.json(
+            { message: 'start_date は YYYY-MM-DD 形式で指定してください。' },
+            { status: 400 }
+          );
+        }
+        whereClauses.push(`n.notification_data_time::date >= $${paramIndex}`);
+        queryParams.push(start_date);
+        paramIndex++;
+      }
+      // ?end_date=YYYY-MM-DD (その日以前)
+      if (end_date) {
+        if (!datePattern.test(end_date)) {
+          return NextResponse.json(
+            { message: 'end_date は YYYY-MM-DD 形式で指定してください。' },
+            { status: 400 }
+          );
+        }
+        whereClauses.push(`n.notification_data_time::date <= $${paramIndex}`);
+        queryParams.push(end_date);
+        paramIndex++;
+      }
+    }
+
     // ?is_completed=... (完了状態で絞り込み)
     if (is_completed === 'true' || is_completed === 'false') {
       whereClauses.push(`n.is_completed = $${paramIndex}`);
@@ -75,6 +118,8 @@ export async function GET(request) {
     query += ' ORDER BY n.notification_id DESC';
 
     const { rows } = await db.query(query, queryParams);
+
+  // console.log('Query:', query, 'Params:', queryParams);
 
     return NextResponse.json(rows);
 
@@ -100,7 +145,10 @@ export async function POST(request) {
       product_name,
       size,
       quantity,
-      remarks
+      remarks,
+      // 任意指定の作成日時（どちらかのキーを受け付ける）
+      created_at,
+      notification_data_time
     } = body;
 
     // 必須項目のバリデーション
@@ -128,28 +176,70 @@ export async function POST(request) {
     // 2. priority_id はリクエストに含まれないため、デフォルト値を設定
     const defaultPriorityId = 1; // "通常"などを意味するIDを想定
     
-    // データベースに新しい指示を挿入するクエリ
-    const insertQuery = `
-      INSERT INTO notifications (
-        notification_line_id,
-        notification_priority_id,
-        notification_quantity,
-        notification_item_name,
-        notification_item_size,
-        notification_remarks
-      ) 
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING notification_id;
-    `;
+    // 3. 作成日時（notification_data_time）の任意指定を処理
+    //    - created_at もしくは notification_data_time のどちらかが与えられていればそれを利用
+    //    - 未指定ならDBのデフォルト（現在時刻）に任せる
+    const requestedTimestamp = created_at ?? notification_data_time ?? null;
+    if (requestedTimestamp !== null) {
+      // 簡易フォーマットチェック（ISO8601推奨、YYYY-MM-DD も許可）
+      // Date.parse による検証（NaNでなければ受け付け）
+      const parsed = Date.parse(requestedTimestamp);
+      if (isNaN(parsed)) {
+        return NextResponse.json(
+          { message: '作成日時は ISO 8601（例: 2025-01-02T08:30:00+09:00）または YYYY-MM-DD 形式で指定してください。' },
+          { status: 400 }
+        );
+      }
+    }
     
-    const values = [
-      line_id,
-      defaultPriorityId,
-      quantity,
-      product_name,
-      size,
-      remarks
-    ];
+    // データベースに新しい指示を挿入するクエリ（作成日時の有無で分岐）
+    let insertQuery;
+    let values;
+    if (requestedTimestamp !== null) {
+      insertQuery = `
+        INSERT INTO notifications (
+          notification_line_id,
+          notification_priority_id,
+          notification_quantity,
+          notification_item_name,
+          notification_item_size,
+          notification_remarks,
+          notification_data_time
+        ) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING notification_id;
+      `;
+      values = [
+        line_id,
+        defaultPriorityId,
+        quantity,
+        product_name,
+        size,
+        remarks,
+        requestedTimestamp
+      ];
+    } else {
+      insertQuery = `
+        INSERT INTO notifications (
+          notification_line_id,
+          notification_priority_id,
+          notification_quantity,
+          notification_item_name,
+          notification_item_size,
+          notification_remarks
+        ) 
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING notification_id;
+      `;
+      values = [
+        line_id,
+        defaultPriorityId,
+        quantity,
+        product_name,
+        size,
+        remarks
+      ];
+    }
     
     const result = await db.query(insertQuery, values);
     const newInstructionId = result.rows[0].notification_id;
