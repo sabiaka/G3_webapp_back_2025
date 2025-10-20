@@ -16,3 +16,5 @@ DROP TABLE
 DROP TABLE IF EXISTS machine_logs;
 DROP TABLE IF EXISTS machine_status;
 DROP TABLE IF EXISTS employees;
+DROP TABLE IF EXISTS inspection_results;
+DROP TABLE IF EXISTS inspection_lots;

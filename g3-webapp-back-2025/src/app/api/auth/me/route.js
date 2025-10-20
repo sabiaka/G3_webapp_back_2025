@@ -57,7 +57,8 @@ export async function GET(request) {
 			  e.employee_is_active, 
 			  e.employee_color_code,
 			  e.employee_role_id,
-			  r.role_name
+			  r.role_name,
+			  COALESCE(r.is_admin, FALSE) AS role_is_admin
 			FROM employees e
 			LEFT JOIN roles r ON r.role_id = e.employee_role_id
 			WHERE e.employee_id = $1
@@ -90,6 +91,7 @@ export async function GET(request) {
 			employee_name: row.employee_name,
 			role_id: row.employee_role_id,
 			role_name: row.role_name,
+			is_admin: !!row.role_is_admin,
 			employee_color_code: row.employee_color_code,
 			// 参考用に要求があれば返す: employee_user_id, role_name(元payload)
 			_debug: process.env.DEBUG_AUTH === '1' ? { employee_user_id, token_role_id: role_id, token_role_name: role_name } : undefined,

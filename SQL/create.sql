@@ -48,20 +48,21 @@ CREATE TABLE priorities (
 
 -- 【Notifications(生産目標通知)】
 CREATE TABLE notifications (
-    notification_id SERIAL PRIMARY KEY,         -- 通知ID（自動採番）
-    notification_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 通知日時（自動設定）
-    notification_line_id INT NOT NULL,          -- 担当ラインID（外部キー）
-    notification_quantity INT NOT NULL,         -- 生産数量
-    notification_item_name VARCHAR(50),         -- 品名
-    notification_item_size VARCHAR(50),         -- サイズ
-    notification_color VARCHAR(50),             -- カラー
-    notification_spring_type VARCHAR(50),       -- バネタイプ
-    notification_accessories VARCHAR(50),       -- 同梱品
-    notification_delivery_method VARCHAR(50),   -- 配送方法
-    notification_delivery_address VARCHAR(100), -- 配送先住所
-    notification_delivery_company VARCHAR(50),  -- 配送会社名
-    notification_remarks TEXT,                  -- 備考
-    notification_priority_id INT NOT NULL,      -- 優先度ID（外部キー）
+    notification_id SERIAL PRIMARY KEY,
+    notification_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notification_line_id INT NOT NULL,
+    notification_quantity INT NOT NULL,
+    notification_item_name VARCHAR(50),
+    notification_item_size VARCHAR(50),
+    notification_color VARCHAR(50),
+    notification_spring_type VARCHAR(50),
+    notification_accessories VARCHAR(50),
+    notification_delivery_method VARCHAR(50),
+    notification_delivery_address VARCHAR(100),
+    notification_delivery_company VARCHAR(50),
+    notification_remarks TEXT,
+    notification_priority_id INT NOT NULL,
+    is_completed BOOLEAN NOT NULL DEFAULT false,
     FOREIGN KEY (notification_line_id) REFERENCES production_lines(line_id),
     FOREIGN KEY (notification_priority_id) REFERENCES priorities(priority_id)
 );
@@ -76,36 +77,96 @@ CREATE TABLE machines (
 CREATE TABLE machine_status (
     machine_status_id SERIAL PRIMARY KEY,                        -- 主キー
     machine_data_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 状態記録時刻
-    machine_name VARCHAR(100) NOT NULL,                          -- 対象機械ID（machines.machine_id）
-    status VARCHAR(20) NOT NULL CHECK (status IN ('稼働中','停止中','異常あり','メンテ中')), -- 現在ステータス
-    today_uptime_seconds INT DEFAULT 0,                          -- 今日の稼働秒数（算出配信方式なら冗長列）
+    machine_id INT NOT NULL,                                     -- 対象機械ID（machines.machine_id）
+    machine_start_time TIMESTAMP NULL,                           -- 機械の起動時刻（稼働開始のタイムスタンプ）
     today_production_count INT DEFAULT 0,                        -- 今日の累計生産数
     machine_last_inspection DATE,                                -- 最終点検日
-    next_inspection_date DATE                                    -- 次回点検予定日
-    -- ,FOREIGN KEY (machine_id) REFERENCES machines(machine_id) -- 必要なら制約を有効化
+    inspection_interval_days INT DEFAULT 90 NOT NULL             -- 点検間隔（日数）
+--  FOREIGN KEY (machine_id) REFERENCES machines(machine_id)     -- 必要なら制約を有効化
 );
 
 -- 【Machine logs(エラーログ)】
 CREATE TABLE machine_logs (
-    log_id SERIAL PRIMARY KEY,
-    machine_name VARCHAR(100) NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    log_type VARCHAR(10) CHECK (log_type IN ('error','warning','info')),
-    title VARCHAR(100) NOT NULL,
-    message TEXT
+    log_id SERIAL PRIMARY KEY,                                           -- ログID
+    machine_name VARCHAR(100) NOT NULL,                                  -- 対象機械NAME
+    unit_id INT NULL,                                                    -- 対象ユニットID (任意)
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,                       -- 発生時刻
+    log_type VARCHAR(10) CHECK (log_type IN ('error','warning','info')), -- 種別
+    title VARCHAR(100) NOT NULL,                                         -- ログタイトル（コード + 概要）
+    message TEXT                                                         -- 詳細メッセージ
 );
 
 --【画像検査テーブル】
-CREATE TABLE inspection_results (
-    inspection_id SERIAL PRIMARY KEY,                                   -- 自動採番
-    inspection_camera_id VARCHAR(50) NOT NULL,                          -- カメラ名
-    inspection_product_id VARCHAR(50) NOT NULL,                         -- 製品名
-    inspection_result VARCHAR(50) NULL,                                 -- 検査結果（良品、不良など）
-    inspection_reason TEXT NULL,                                        -- 問題点詳細
-    inspection_image_path TEXT NOT NULL,                                -- 検査画像パス
-    inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 撮影日時
-    inspection_inspected_time TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP  -- 検査日時
+--CREATE TABLE inspection_results (
+--    inspection_id SERIAL PRIMARY KEY,                                   -- 自動採番
+--    inspection_camera_id VARCHAR(50) NOT NULL,                          -- カメラ名
+--    inspection_product_id VARCHAR(50) NOT NULL,                         -- 製品名
+--    inspection_result VARCHAR(50) NULL,                                 -- 検査結果（良品、不良など）
+--    inspection_reason TEXT NULL,                                        -- 問題点詳細
+--    inspection_image_path TEXT NOT NULL,                                -- 検査画像パス
+--    inspection_captured_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- 撮影日時
+--    inspection_inspected_time TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP  -- 検査日時
+--);
+
+
+
+
+-- セクションの正規化（任意）
+--CREATE TABLE inspection_sections (
+--    section_id SERIAL PRIMARY KEY,                       -- 連番
+--    section_code VARCHAR(32) UNIQUE NOT NULL,            -- セクション内部コード（例: 'spring', 'alayer'）
+--    section_name VARCHAR(64) NOT NULL                    -- セクション表示名（例: 'バネ留め', 'A層検査'）
+--);
+
+-- ロット（製品ID等に相当）
+CREATE TABLE inspection_lots (
+    id BIGSERIAL PRIMARY KEY,                                         -- 連番
+    lot_id VARCHAR(64) NOT NULL,                                      -- ロット名（製品ID等、例: 'MAT-10001'）
+    section_code VARCHAR(32) NOT NULL,                                -- セクション内部コード（例: 'spring', 'alayer'）
+    captured_at TIMESTAMP WITH TIME ZONE NOT NULL,                    -- 検査代表時刻（最初/最後のいずれか）
+--  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,    -- レコード作成日時(不要だと...)
+    UNIQUE (lot_id)                                                   -- ロットIDは一意
 );
+
+-- カメラショット（1ロット内で複数可、同一camera_idで複数行OK）
+CREATE TABLE inspection_camera_shots (
+    id BIGSERIAL PRIMARY KEY,                                                    -- 連番
+    lot_id_ref BIGINT NOT NULL REFERENCES inspection_lots(id) ON DELETE CASCADE, -- ロット参照ID
+    camera_id VARCHAR(64) NOT NULL,                                              -- カメラ名（例: 'B-spring01', 'A-main01'）
+    status VARCHAR(16) NOT NULL CHECK (status IN ('PASS','FAIL','MISSING')),     -- 判定結果(基本はPASSかFAIL)
+    details TEXT NULL,                                                           -- 不良理由（PASSの場合はNULLを推奨）
+    image_path TEXT NULL,                                                        -- 画像パス（MISSINGの場合はNULL可）
+    shot_seq INT NOT NULL DEFAULT 1,                                             -- 同一カメラ内の通番（1,2,3...n）
+    captured_at TIMESTAMP WITH TIME ZONE NULL                                    -- ショット撮影時刻
+);
+
+
+-- ロット（製品ID等に相当）
+CREATE TABLE inspection_lots (
+    id BIGSERIAL PRIMARY KEY,                                       -- ロット内部ID（連番）
+    lot_id VARCHAR(64) NOT NULL,                                    -- ロットID（製品ID等、例: 'MAT-10001'）
+    section_code VARCHAR(32) NOT NULL,                              -- セクション内部コード（例: 'spring'）
+    captured_at TIMESTAMP WITH TIME ZONE NOT NULL,                  -- 検査代表時刻（最初/最後のいずれか）
+--    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,  -- レコード作成日時
+    UNIQUE (lot_id)                                                 -- ロットIDは一意
+);
+
+-- カメラショット（1ロット内で複数可、同一camera_idで複数行OK）
+CREATE TABLE inspection_camera_shots (
+    id BIGSERIAL PRIMARY KEY,                                                   -- ショット内部ID（連番）
+    lot_id_ref BIGINT NOT NULL REFERENCES inspection_lots(id) ON DELETE CASCADE,-- ロット参照ID
+    camera_id VARCHAR(64) NOT NULL,                                             -- カメラID（例: 'B-spring01', 'A-main01'）
+    status VARCHAR(16) NOT NULL CHECK (status IN ('PASS','FAIL','MISSING')),    -- 判定ステータス
+    details TEXT NULL,                                                          -- 不良理由等（PASS時はNULL推奨）
+    image_path TEXT NULL,                                                       -- 画像パス（MISSING時はNULL可）
+    shot_seq INT NOT NULL DEFAULT 1,                                            -- 同一カメラ内の通番（1..n）
+    captured_at TIMESTAMP WITH TIME ZONE NULL                                   -- ショット撮影時刻
+);
+
+
+
+
+
 
 --【生産個数管理テーブル】
 CREATE TABLE machine_production (
@@ -126,7 +187,7 @@ CREATE TABLE production_reports (
     prodreport_actual_quantity INT NOT NULL,       -- 実績数量
     prodreport_achievement_rate DECIMAL(5,2),      -- 達成率（例: 95.00）
     prodreport_defective_quantity INT NOT NULL,    -- 不良数
-    prodreport_employee_id INT,                    -- 担当者ID（employeesテーブルの外部キー）
+    prodreport_employee_id INT,                    -- 担当者ID
     prodreport_remarks TEXT,                       -- 備考
     FOREIGN KEY (prodreport_employee_id) REFERENCES employees(employee_id)
 );
