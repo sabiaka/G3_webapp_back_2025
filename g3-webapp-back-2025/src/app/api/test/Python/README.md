@@ -1,32 +1,49 @@
-# 検査結果送信 GUI ツール
+# 検査用 Python GUI クライアント
 
-このフォルダの `Jetson_Sample.py` は、検査結果をAPIへ送信するためのTkinterベースのGUIツールです。
+このディレクトリには、検査前/検査後のデータと画像を Next.js API に送信するための GUI ツールが含まれます。
 
-## 必要要件
-- Python 3.9+（Windows/Jetson いずれも可）
-- パッケージ: requests
+- `POST_inspection.py` … 検査前(初期登録)送信用 GUI
+- `PUT_inspection.py` … 検査後(結果更新)送信用 GUI
 
-インストール:
+## 事前準備
+
+PowerShell でこのフォルダに移動し、依存をインストールします。
 
 ```powershell
+cd "c:\Users\sabua\OneDrive\デスクトップ\repo\G3_webapp_back_2025\g3-webapp-back-2025\src\app\api\test\Python"
 python -m pip install -r requirements.txt
 ```
 
-## 使い方
-1. Next.js API サーバーを起動（デフォルト: http://localhost:3001）。
-2. GUIを起動:
-   ```powershell
-   python .\Jetson_Sample.py
-   ```
-3. 次の項目を入力/選択:
-   - 送信先URL
-   - カメラID / 製品ID
-   - 判定（PASS/FAIL）と理由（FAIL時必須）
-   - captured_at / inspected_at（UTC ISO形式）
-   - 画像ファイル
-4. 送信を押すと multipart/form-data で `metadata` と `image_file` をPOSTします。
+Windows 標準の Python/Tkinter が必要です。もし `tkinter` の import エラーが出る場合は、Python の Tk サポート付きビルドをインストールしてください。
 
-## メモ
-- 入力内容は `JetsonGUI_prefs.json` に保存され、次回起動時に復元されます。
-- inspected_at は送信直前に「現在に更新」する確認が表示されます。
-- タイムアウトは30秒に設定しています（`requests.post(..., timeout=30)`）。
+## 使い方
+
+1. Next.js サーバを起動しておきます (例: `http://localhost:3000`)。
+2. 以下のいずれかを実行:
+
+```powershell
+python .\POST_inspection.py
+# または
+python .\PUT_inspection.py
+```
+
+GUI が立ち上がるので、各項目を入力して送信してください。
+
+- POST: `section_code` は UI で「バネ留め (spring)」「A層検査 (alayer)」から選択できます。
+- 画像はファイルダイアログで選べます。
+- レスポンスは下部のログに表示されます。
+- 入力内容は `g3_inspection_gui_config.json` に保存/復元されます。
+- 「現在時刻 (JST) を自動送信」モードがデフォルトONです。OFFにするとJST形式の日時を手動で入力できます。
+
+## API について
+
+- 検査前(POST): `/api/ingress/inspection`
+  - multipart/form-data
+  - パート `metadata` は JSON、`image` は画像ファイル
+  - 成功時 201, `lot_id` と `filename`(public パス) を返します
+- 検査後(PUT): `/api/ingress/inspection/result/{filename}`
+  - multipart/form-data
+  - パート `metadata` は JSON、`image` は任意
+  - 成功時 200
+
+サーバ側仕様の詳細はリポジトリ内の `src/app/api/ingress/inspection` 配下の実装を参照してください。
