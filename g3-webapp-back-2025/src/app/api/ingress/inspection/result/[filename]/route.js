@@ -1,46 +1,44 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-import db from '@/lib/db'; // DB接続 (db.queryが直接使えることを想定)
+import db from '@/lib/db'; // DB接続
 
 /**
- * 7. 【検査後】結果と画像の送信 (UPDATE)
- * ★ captured_at の上書きを *しない* バージョン
+ * 7. 【検査後】API (★画像パスをファイル名のみ保存ver)
+ * (captured_at の上書きは *しない* バージョン)
  */
 export async function PUT(request, { params }) {
-  const filename = params.filename;
+  const filename = params.filename; // (例: MAT-00001_B-spring01_1.jpg)
   if (!filename) {
     return NextResponse.json({ "error": "Bad Request", "details": "URLにファイル名が必要です。" }, { status: 400 });
   }
 
   try {
     const formData = await request.formData();
-    
     const metadataString = formData.get('metadata');
     const imageFile = formData.get('image'); 
 
+    // (バリデーションは変更なし)
     if (!metadataString) {
       return NextResponse.json({ "error": "Bad Request", "details": "metadataが必須です。" }, { status: 400 });
     }
-
     const metadata = JSON.parse(metadataString);
-    // ★ captured_at のバリデーションを削除
     const { status, details } = metadata;
-
     if (!status) {
       return NextResponse.json({ "error": "Bad Request", "details": "metadataに 'status' が必須です。" }, { status: 400 });
     }
 
-    // --- トランザクション開始 ---
     await db.query('BEGIN');
 
-    // 4. 更新対象のレコードをDBから探す (変更なし)
+    // --- 4. 更新対象のレコードをDBから探す (★修正) ---
+    // image_path カラムにファイル名がそのまま保存されている前提
     const findQuery = `
       SELECT id FROM inspection_camera_shots
-      WHERE image_path LIKE $1
+      WHERE image_path = $1 
       LIMIT 1;
     `;
-    const findResult = await db.query(findQuery, [`%/${filename}`]);
+    // ★ LIKE '%/filename' から、完全一致 'filename' に変更
+    const findResult = await db.query(findQuery, [filename]); 
 
     if (findResult.rows.length === 0) {
       await db.query('ROLLBACK');
@@ -51,21 +49,25 @@ export async function PUT(request, { params }) {
     }
     
     const shotDbId = findResult.rows[0].id;
-    let publicImagePath = null;
+    let newImagePath = null; // ★ 変数名を変更
 
-    // 5. 画像ファイルの保存 (変更なし)
+    // --- 5. 検査後の画像ファイルが送信されていれば保存 (★修正) ---
     if (imageFile) {
+      // 物理的な保存先フォルダは変更なし
       const uploadDir = path.join(process.cwd(), 'public', 'ImageDB', 'afterTest');
       await fs.mkdir(uploadDir, { recursive: true });
 
+      // ファイル名はURLパラメータのものをそのまま使用 (変更なし)
       const savePath = path.join(uploadDir, filename);
       const buffer = Buffer.from(await imageFile.arrayBuffer());
       await fs.writeFile(savePath, buffer);
       
-      publicImagePath = `/ImageDB/afterTest/${filename}`;
+      // ★ DBに保存する値は、ファイル名のみ
+      newImagePath = filename; 
     }
 
-    // --- 6. データベースをUPDATE (★ここを修正) ---
+    // --- 6. データベースをUPDATE (★修正) ---
+    // (captured_at を更新しないロジックのまま)
     const updateQuery = `
       UPDATE inspection_camera_shots
       SET
@@ -76,21 +78,19 @@ export async function PUT(request, { params }) {
         id = ${imageFile ? '$4' : '$3'};
     `;
     
-    // ★ queryParams から captured_at を削除
     const queryParams = imageFile
-      ? [status, details, publicImagePath, shotDbId]
+      ? [status, details, newImagePath, shotDbId] // ★ newImagePath (ファイル名のみ) を使用
       : [status, details, shotDbId];
 
     await db.query(updateQuery, queryParams);
-
-    // --- トランザクションをコミット ---
     await db.query('COMMIT');
 
-    // 7. 成功レスポンス (変更なし)
+    // --- 7. 成功レスポンス (★修正) ---
     return NextResponse.json(
       {
         "message": "検査結果、受信したよ！",
-        "filename": publicImagePath || `(画像は更新されませんでした)`
+        // ★ 画像が更新されなくても、元のファイル名を返すように修正
+        "filename": filename 
       },
       { status: 200 }
     );
