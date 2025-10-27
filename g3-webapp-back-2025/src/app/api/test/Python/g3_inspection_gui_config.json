@@ -4,16 +4,28 @@
   "put_section_label": "A層検査 (alayer)",
   "lot_id": "MAT-10008",
   "camera_id": "B-spring01",
-  "shot_seq": 3,
+  "shot_seq": 1,
   "status": "FAIL",
   "details": "かわいいため",
-  "captured_at": "2025-10-20T16:31:42.153365+09:00",
+  "captured_at": "2025-10-27T15:01:11.525714+09:00",
   "put_image_path": "C:/Users/sabua/Downloads/twitter_media_harvest/Ringochan_TxT-1979514029518503970-04.jpg",
   "post_url": "http://localhost:3000/api/ingress/inspection",
   "post_section_label": "バネ留め (spring)",
   "post_image_path": "C:/Users/sabua/Downloads/twitter_media_harvest/mira__mira_mira-1979933613362753700-01.jpg",
   "post_last_lot_id": "MAT-10008",
   "post_last_public_path": "/ImageDB/beforeTest/MAT-10008_B-spring01_3.jpg",
-  "post_send_now_jst": false,
-  "put_send_now_jst": true
+  "post_send_now_jst": true,
+  "put_send_now_jst": true,
+  "post_shots": [
+    {
+      "camera_id": "B-spring01",
+      "shot_seq": 1,
+      "captured_at": "2025-10-27T14:57:59.634932+09:00",
+      "image_path": ""
+    }
+  ],
+  "post_base_url": "http://localhost:3000/api/ingress/inspection",
+  "post_lot_id": "MAT-10025",
+  "post_before_path": "C:/Users/sabua/Downloads/twitter_media_harvest/po_no_sb-1982413163762274701-02.jpg",
+  "post_after_path": "C:/Users/sabua/Downloads/twitter_media_harvest/fuhao10708-1982598395153015063-01.jpg"
 }
