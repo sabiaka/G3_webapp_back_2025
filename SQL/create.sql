@@ -216,6 +216,16 @@ CREATE TABLE slots (
 
 
 
+--【今日のお知らせテーブル】
+CREATE TABLE today_message (
+    message_id INT PRIMARY KEY DEFAULT 1,       -- 常にID=1のレコードだけを使う
+    content TEXT,                               -- お知らせの本文
+    priority INT DEFAULT 1,                       -- 重要度 (1:低い, 2:普通, 3:高い)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- 最終更新日時
+);
+
+
+
 
 
 
