@@ -320,3 +320,8 @@ INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, ima
 (8, 'A-main01', 'FAIL', 'ゴミ付着', 'LOLL-10003_A-main01.jpg', 1, '2025-10-01 17:51:05.321+00'),
 (8, 'A-stitch01', 'PASS', NULL, 'LOLL-10003_A-stitch01.jpg', 1, '2025-10-01 17:51:05.321+00'),
 (8, 'A-stitch02', 'FAIL', '糸ほつれ', 'LOLL-10003_A-stitch02.jpg', 1, '2025-10-01 17:51:05.321+00');
+
+
+-- 今日のおしらせ
+INSERT INTO today_message (message_id, content, priority)
+VALUES (1, '後歩きから対空昇竜、大体波動に化ける...', 1);
