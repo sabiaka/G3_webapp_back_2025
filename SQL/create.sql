@@ -226,7 +226,18 @@ CREATE TABLE today_message (
 
 
 
-
+--【日報テーブル】
+CREATE TABLE daily_reports (
+    report_id SERIAL PRIMARY KEY,                                -- 日報ID (自動採番)
+    employee_id INT NOT NULL,                                    -- 従業員ID (FK)
+    line_id INT NOT NULL,                                        -- ラインID (FK)
+    report_date DATE NOT NULL,                                   -- 報告日 (例: '2025-11-05')
+    notes TEXT,                                                  -- 備考・特記事項 (日記内容)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,              -- 作成日時
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,              -- 更新日時
+    FOREIGN KEY (employee_id) REFERENCES employees (employee_id),
+    FOREIGN KEY (line_id) REFERENCES production_lines (line_id)
+);
 
 
 
