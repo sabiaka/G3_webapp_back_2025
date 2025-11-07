@@ -38,7 +38,7 @@ export async function GET(request) {
     const queryParams = [sectionCode, targetDate];
 
     // 3. データベースにクエリを実行
-    // ▼ WHERE句で ::date を使い、UTC日付で比較します
+    // ▼ 基準日付はロットの代表時刻(l.captured_at)に合わせる（他APIと統一）
     const summaryQuery = `
       SELECT
         COUNT(*) FILTER (WHERE s.status = 'PASS') AS pass_count,
@@ -49,14 +49,14 @@ export async function GET(request) {
         inspection_lots l ON s.lot_id_ref = l.id
       WHERE
         l.section_code = $1 AND
-        (s.captured_at at time zone 'UTC')::date = $2;
+        to_char(l.captured_at, 'YYYY-MM-DD') = $2;
     `;
 
     const reasonsQuery = `
       SELECT
         s.details AS reason,
-        -- captured_atをUTC基準の日付文字列 'YYYY-MM-DD' に変換して取得
-        TO_CHAR(s.captured_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
+        -- ロット代表時刻を日付文字列として取得（他APIと統一）
+        TO_CHAR(l.captured_at, 'YYYY-MM-DD') AS date,
         COUNT(*) AS count
       FROM
         inspection_camera_shots s
@@ -64,13 +64,12 @@ export async function GET(request) {
         inspection_lots l ON s.lot_id_ref = l.id
       WHERE
         l.section_code = $1 AND
-        -- summaryQuery と条件を合わせるため、こちらもUTC基準で比較
-        (s.captured_at AT TIME ZONE 'UTC')::date = $2 AND
+        to_char(l.captured_at, 'YYYY-MM-DD') = $2 AND
         s.status = 'FAIL' AND
         s.details IS NOT NULL
       GROUP BY
         s.details,
-        date -- SELECT句のエイリアス 'date' を使う
+        TO_CHAR(l.captured_at, 'YYYY-MM-DD')
       ORDER BY
         count DESC;
     `;
@@ -80,10 +79,8 @@ export async function GET(request) {
       pool.query(reasonsQuery, queryParams)
     ]);
 
-    console.log('summaryQuery:', queryParams);
-    console.log('reasonsQuery:', queryParams);
-    console.log('summaryResult:', summaryResult);
-    console.log('reasonsResult:', reasonsResult);
+  // デバッグログが多すぎると本番でノイズになるため最小限にする
+  // console.debug('inspections/summary queryParams:', queryParams);
 
     // 4. レスポンスデータを組み立てる
     const passCount = parseInt(summaryResult.rows[0]?.pass_count || '0', 10);
