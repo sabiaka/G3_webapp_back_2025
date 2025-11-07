@@ -216,7 +216,28 @@ CREATE TABLE slots (
 
 
 
+--【今日のお知らせテーブル】
+CREATE TABLE today_message (
+    message_id INT PRIMARY KEY DEFAULT 1,       -- 常にID=1のレコードだけを使う
+    content TEXT,                               -- お知らせの本文
+    priority INT DEFAULT 1,                       -- 重要度 (1:低い, 2:普通, 3:高い)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- 最終更新日時
+);
 
+
+
+--【日報テーブル】
+CREATE TABLE daily_reports (
+    report_id SERIAL PRIMARY KEY,                                -- 日報ID (自動採番)
+    employee_id INT NOT NULL,                                    -- 従業員ID (FK)
+    line_id INT NOT NULL,                                        -- ラインID (FK)
+    report_date DATE NOT NULL,                                   -- 報告日 (例: '2025-11-05')
+    notes TEXT,                                                  -- 備考・特記事項 (日記内容)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,              -- 作成日時
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,              -- 更新日時
+    FOREIGN KEY (employee_id) REFERENCES employees (employee_id),
+    FOREIGN KEY (line_id) REFERENCES production_lines (line_id)
+);
 
 
 
