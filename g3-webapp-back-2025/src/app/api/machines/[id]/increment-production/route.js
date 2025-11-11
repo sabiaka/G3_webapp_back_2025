@@ -1,166 +1,149 @@
-import { NextResponse } from "next/server";
-import db from "@/lib/db"; // db.query() を直接使う
+import { NextResponse } from 'next/server';
+import pool from '@/lib/db'; // データベース接続プール
 
-// ★ 修正: client の代わりに db を直接受け取る
-async function generateNewMatLotId(db) {
-  const prefix = 'MAT-';
-  const query = `
-    SELECT lot_id FROM inspection_lots
-    WHERE lot_id LIKE $1
-    ORDER BY lot_id DESC
-    LIMIT 1;
-  `;
-  // ★ 修正: client.query -> db.query
-  const result = await db.query(query, [`${prefix}%`]);
+/**
+ * lot_idの数値部分をインクリメントして新しいIDを生成する
+ * (例: "MAT-00123" -> "MAT-00124")
+ * @param {string} currentLotId - 現在のロットID
+ * @returns {string} - 新しいロットID
+ * @throws {Error} - "MAT-ABC" のような不正な形式の場合
+ */
+function getNextLotId(currentLotId) {
+  // 正規表現で "プレフィックス" と "数値部分" に分割
+  // (例: "MAT-00123" -> ["MAT-", "00123"])
+  const matches = currentLotId.match(/^([A-Z]+-)(\d+)$/);
 
-  let nextNumber = 1;
-  if (result.rows.length > 0) {
-    const lastId = result.rows[0].lot_id;
-    const lastNumber = parseInt(lastId.replace(prefix, ''), 10);
-    nextNumber = lastNumber + 1;
+  if (!matches || matches.length < 3) {
+    throw new Error(`不正なロットID形式です: ${currentLotId}`);
   }
-  return `${prefix}${String(nextNumber).padStart(5, '0')}`; 
+
+  const prefix = matches[1];      // "MAT-"
+  const numberPart = matches[2];  // "00123"
+  const numberLength = numberPart.length; // 5
+
+  const currentNumber = parseInt(numberPart, 10); // 123
+  const nextNumber = currentNumber + 1;           // 124
+
+  // padStartで桁数を維持 (例: 124 -> "00124")
+  const newNumberPart = String(nextNumber).padStart(numberLength, '0');
+
+  return prefix + newNumberPart; // "MAT-00124"
 }
 
+/**
+ * API: 5. 生産数をインクリメント（lot_idも加算）
+ * (POST /api/machines/{id}/increment-production?section={section})
+ */
+export async function POST(request, { params }) {
+  const client = await pool.connect(); 
+  
+  try {
+    // 1. パスパラメータとクエリパラメータを取得
+    const machineId = params.id; // パスから {id} を取得
+    const { searchParams } = new URL(request.url);
+    const section = searchParams.get('section');
 
-// 生産数インクリメント API
-export async function POST(request, ctx) {
-    const { id } = await ctx.params;
+    // 2. バリデーション (section)
+    if (!section) {
+      return NextResponse.json(
+        { error: "Bad Request", details: ["クエリパラメータ 'section' は必須です。"] },
+        { status: 400 }
+      );
+    }
+    if (section !== 'spring' && section !== 'alayer') {
+      return NextResponse.json(
+        { error: "Bad Request", details: ["'section' は 'spring' または 'alayer' を指定してください。"] },
+        { status: 400 }
+      );
+    }
 
-    // ★ 修正: db.connect() を削除
-    // const client = await db.connect(); 
+    await client.query('BEGIN'); // --- トランザクション開始 ---
 
-    try {
-        // 1) 機械の存在確認
-        const isNumericId = /^\d+$/.test(String(id));
-        let machineId;
-        if (isNumericId) {
-            // ★ 修正: client.query -> db.query
-            const res = await db.query(
-                "SELECT machine_id FROM machines WHERE machine_id = $1",
-                [parseInt(id, 10)]
-            );
-            if (res.rows.length === 0) {
-                return NextResponse.json({ error: "Machine not found" }, { status: 404 });
-            }
-            machineId = res.rows[0].machine_id;
-        } else {
-            // ★ 修正: client.query -> db.query
-            const res = await db.query(
-                "SELECT machine_id FROM machines WHERE machine_name = $1",
-                [id]
-            );
-            if (res.rows.length === 0) {
-                return NextResponse.json({ error: "Machine not found" }, { status: 404 });
-            }
-            machineId = res.rows[0].machine_id;
-        }
+    // --- ▼ 変更点 ▼ ---
+    // 3. (処理A) machine_status の "最新の行" の today_production_count を +1 する
+    //    (machine_id = $1 の中で、machine_status_id が最大の行のみを対象)
+    const updateCountQuery = `
+      UPDATE machine_status
+      SET today_production_count = today_production_count + 1
+      WHERE machine_id = $1
+        AND machine_status_id = (
+          SELECT MAX(machine_status_id)
+          FROM machine_status
+          WHERE machine_id = $1
+        )
+      RETURNING today_production_count;
+    `;
+    // --- ▲ 変更点 ▲ ---
 
-        // 2) 直近のステータス行取得
-        // ★ 修正: client.query -> db.query
-        const latestRes = await db.query(
-            `
-        SELECT machine_status_id, machine_start_time, today_production_count, machine_data_time
-        FROM machine_status
-        WHERE machine_id = $1
-        ORDER BY machine_data_time DESC
-        LIMIT 1
-      `,
-            [machineId]
-        );
+    const updateResult = await client.query(updateCountQuery, [machineId]);
 
-        if (latestRes.rows.length === 0 || !latestRes.rows[0].machine_start_time) {
-            // ★ 修正: client.release() を削除
-            return NextResponse.json(
-                { error: "Machine is not running" },
-                { status: 409 }
-            );
-        }
+    if (updateResult.rows.length === 0) {
+      // 該当する machine_id が存在しなかった (もしくはサブクエリで見つからなかった)
+      await client.query('ROLLBACK');
+      return NextResponse.json(
+        { error: "Machine not found" },
+        { status: 404 }
+      );
+    }
+    const newProductionCount = updateResult.rows[0].today_production_count;
 
-        // ★ 修正: client.query -> db.query
-        await db.query('BEGIN');
+    // 4. (処理B) inspection_lots から現在の lot_id を取得
+    const getCurrentLotQuery = `
+      SELECT lot_id 
+      FROM inspection_lots
+      WHERE section_code = $1
+      ORDER BY captured_at DESC
+      LIMIT 1;
+    `;
+    const currentLotResult = await client.query(getCurrentLotQuery, [section]);
 
-        const latest = latestRes.rows[0];
-        const { machine_status_id, machine_start_time, machine_data_time } = latest;
+    if (currentLotResult.rows.length === 0) {
+      // 該当セクションにロットが1件も存在しない
+      await client.query('ROLLBACK');
+      return NextResponse.json(
+        { error: "No active lot", details: "指定セクションに現在生産中のロットがありません。" },
+        { status: 409 }
+      );
+    }
+    
+    const currentLotId = currentLotResult.rows[0].lot_id; // (例: "MAT-00123")
+    
+    // 5. (処理C) 新しい lot_id を生成
+    const newLotId = getNextLotId(currentLotId); // (例: "MAT-00124")
 
-        // 3) JSTで日付ロール判定
-        // ★ 修正: client.query -> db.query
-        const dateRes = await db.query(
-            `
-          SELECT 
-            (now() AT TIME ZONE 'Asia/Tokyo')::date AS today_jst,
-            ($1::timestamp AT TIME ZONE 'Asia/Tokyo')::date AS row_date
-        `,
-            [machine_data_time]
-        );
-        const todayJst = dateRes.rows[0].today_jst;
-        const rowDate = dateRes.rows[0].row_date;
+    // 6. (処理D) 新しい lot_id で inspection_lots に "新行" を作成
+    const createNewLotQuery = `
+      INSERT INTO inspection_lots (lot_id, section_code, captured_at)
+      VALUES ($1, $2, NOW());
+    `;
+    await client.query(createNewLotQuery, [newLotId, section]);
 
-        // 4) 新しい 'MAT-' の lot_id を採番
-        // ★ 修正: db を渡す
-        const newLotId = await generateNewMatLotId(db); 
-        const section_code = 'spring'; 
-        const captured_at = new Date().toISOString();
+    await client.query('COMMIT'); // --- トランザクション確定 ---
 
-        // 5) inspection_lots テーブルに新しいロットを INSERT
-        const insertLotQuery = `
-            INSERT INTO inspection_lots (lot_id, section_code, captured_at)
-            VALUES ($1, $2, $3)
-        `;
-        // ★ 修正: client.query -> db.query
-        await db.query(insertLotQuery, [
-            newLotId,
-            section_code,
-            captured_at
-        ]);
-        console.log(`[API 5] 新規ロット作成 (生産開始): ${newLotId}`);
+    // 7. 成功レスポンス
+    return NextResponse.json({
+      today_production_count: newProductionCount,
+      lot_id: newLotId // +1 された新しいIDを返す
+    });
 
-
-        if (String(todayJst) !== String(rowDate)) {
-            // 6-A) 日付が変わっていたら
-            // ★ 修正: client.query -> db.query
-            const insertRes = await db.query(
-                `
-                    INSERT INTO machine_status (machine_id, machine_start_time, today_production_count)
-                    VALUES ($1, $2, 1)
-                    RETURNING today_production_count
-                `,
-                [machineId, machine_start_time]
-            );
-
-            // ★ 修正: client.query -> db.query
-            await db.query('COMMIT');
-
-            return NextResponse.json({
-                today_production_count: insertRes.rows[0].today_production_count,
-                new_lot_id: newLotId 
-            });
-        } else {
-            // 6-B) 同日中なら +1
-            // ★ 修正: client.query -> db.query
-            const updateRes = await db.query(
-                `
-                UPDATE machine_status
-                SET today_production_count = COALESCE(today_production_count, 0) + 1
-                WHERE machine_status_id = $1
-                RETURNING today_production_count
-                `,
-                [machine_status_id]
-            );
-
-            // ★ 修正: client.query -> db.query
-            await db.query('COMMIT');
-
-            return NextResponse.json({
-                today_production_count: updateRes.rows[0].today_production_count,
-                new_lot_id: newLotId 
-            });
-        }
-    } catch (err) {
-        // ★ 修正: client.query -> db.query
-        await db.query('ROLLBACK');
-        console.error("API Error:", err);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
-    } 
-    // ★ 修正: finally ブロック (client.release()) を削除
+  } catch (error) {
+    await client.query('ROLLBACK'); // --- エラー時ロールバック ---
+    
+    // lot_id の形式が "MAT-ABC" などで getNextLotId が失敗した場合
+    if (error.message.includes('不正なロットID形式')) {
+      return NextResponse.json(
+        { error: "Internal Server Error", details: `DB内のロットID形式が不正です: ${error.message}` },
+        { status: 500 }
+      );
+    }
+    
+    // その他のDBエラー
+    console.error('API Error (increment-production):', error);
+    return NextResponse.json(
+      { error: 'Internal Server Error', details: error.message },
+      { status: 500 }
+    );
+  } finally {
+    client.release(); // 接続をプールに返却
+  }
 }
