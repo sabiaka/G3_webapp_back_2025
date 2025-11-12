@@ -1,103 +1,137 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-import db from '@/lib/db'; // DB接続
+import pool from '@/lib/db'; // 修正済みのDB接続プール
+import { writeFile, mkdir } from 'fs/promises'; // 画像保存用 (Node.js v14+)
+import path from 'path'; // パス結合用
+
+// 設計書（セクション7）に基づく「検査後」画像の保存ディレクトリ
+const IMAGE_DIR_AFTER = '/imageDB/afterTest/';
+// サーバーのファイルシステム上の絶対パス (Next.jsの public ディレクトリを想定)
+const SAVE_DIR_AFTER = path.join(process.cwd(), 'public', IMAGE_DIR_AFTER);
 
 /**
- * 7. 【検査後】API (★画像パスをファイル名のみ保存ver)
- * (captured_at の上書きは *しない* バージョン)
+ * API: 7. 【検査後】結果と画像の送信（filename指定・単発）
+ * (PUT /api/ingress/inspection/result/{filename})
  */
 export async function PUT(request, { params }) {
-  const filename = params.filename; // (例: MAT-00001_B-spring01_1.jpg)
-  if (!filename) {
-    return NextResponse.json({ "error": "Bad Request", "details": "URLにファイル名が必要です。" }, { status: 400 });
-  }
-
+  const client = await pool.connect(); // トランザクションのために接続を専有
+  
   try {
+    // 1. パスパラメータ（{filename}）を取得
+    // (例: "LOLL-10031_A-main01_A-1_B-1.png")
+    const filename = params.filename; 
+
+    // 2. multipart/form-data をパース
     const formData = await request.formData();
-    const metadataString = formData.get('metadata');
-    const imageFile = formData.get('image'); 
+    const metadataJson = formData.get('metadata');
+    const imageFile = formData.get('image'); // 検査後画像 (任意)
 
-    // (バリデーションは変更なし)
-    if (!metadataString) {
-      return NextResponse.json({ "error": "Bad Request", "details": "metadataが必須です。" }, { status: 400 });
-    }
-    const metadata = JSON.parse(metadataString);
-    const { status, details } = metadata;
-    if (!status) {
-      return NextResponse.json({ "error": "Bad Request", "details": "metadataに 'status' が必須です。" }, { status: 400 });
+    // 3. バリデーション (metadata は必須)
+    if (!metadataJson) {
+      return NextResponse.json(
+        { error: "Bad Request", details: "リクエストに 'metadata' (JSON) が必要です。" },
+        { status: 400 }
+      );
     }
 
-    await db.query('BEGIN');
+    // 4. metadata (JSON) をパース
+    let metadata;
+    try {
+      metadata = JSON.parse(metadataJson);
+    } catch (e) {
+      return NextResponse.json(
+        { error: "Bad Request", details: "metadata が有効な JSON ではありません。" },
+        { status: 400 }
+      );
+    }
 
-    // --- 4. 更新対象のレコードをDBから探す (★修正) ---
-    // image_path カラムにファイル名がそのまま保存されている前提
+    // 5. metadata の内容を検証 (status は必須)
+    const { status, details, captured_at } = metadata;
+    if (!status || (status !== 'PASS' && status !== 'FAIL')) {
+      return NextResponse.json(
+        { error: "Bad Request", details: "metadata に 'status' ('PASS' または 'FAIL') が必要です。" },
+        { status: 400 }
+      );
+    }
+
+    await client.query('BEGIN'); // --- トランザクション開始 ---
+
+    // 6. (DB処理 1) filename から、更新対象のショットID (id) を見つける
+    // (API 6 で登録された '.../beforeTest/...' のパスを検索)
     const findQuery = `
-      SELECT id FROM inspection_camera_shots
-      WHERE image_path = $1 
-      LIMIT 1;
+      SELECT id 
+      FROM inspection_camera_shots 
+      WHERE image_path LIKE $1;
     `;
-    // ★ LIKE '%/filename' から、完全一致 'filename' に変更
-    const findResult = await db.query(findQuery, [filename]); 
+    // (例: '%/LOLL-10031_A-main01_A-1_B-1.png')
+    const findParams = [`%/${filename}`]; 
+    
+    const findResult = await client.query(findQuery, findParams);
 
     if (findResult.rows.length === 0) {
-      await db.query('ROLLBACK');
+      // 該当する検査前データが見つからない
+      await client.query('ROLLBACK');
       return NextResponse.json(
-        { "error": "Not Found", "details": "指定されたファイルの検査前データが見つかりません。" },
+        { error: "Not Found", details: "指定された filename に一致する検査前データが見つかりません。" },
         { status: 404 }
       );
     }
-    
-    const shotDbId = findResult.rows[0].id;
-    let newImagePath = null; // ★ 変数名を変更
+    const shotId = findResult.rows[0].id; // 更新対象の主キー
 
-    // --- 5. 検査後の画像ファイルが送信されていれば保存 (★修正) ---
+    // 7. (任意) 検査後画像ファイルが送信されていれば保存
     if (imageFile) {
-      // 物理的な保存先フォルダは変更なし
-      const uploadDir = path.join(process.cwd(), 'public', 'ImageDB', 'afterTest');
-      await fs.mkdir(uploadDir, { recursive: true });
-
-      // ファイル名はURLパラメータのものをそのまま使用 (変更なし)
-      const savePath = path.join(uploadDir, filename);
-      const buffer = Buffer.from(await imageFile.arrayBuffer());
-      await fs.writeFile(savePath, buffer);
+      const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
+      const savePath = path.join(SAVE_DIR_AFTER, filename);
       
-      // ★ DBに保存する値は、ファイル名のみ
-      newImagePath = filename; 
+      // (ディレクトリが存在しない場合に備えて作成)
+      await mkdir(SAVE_DIR_AFTER, { recursive: true });
+      
+      await writeFile(savePath, imageBuffer);
+      // (注意: DBの image_path は 'beforeTest' のまま変更しないのが設計書(セクション8)の仕様)
     }
 
-    // --- 6. データベースをUPDATE (★修正) ---
-    // (captured_at を更新しないロジックのまま)
+    // 8. (DB処理 2) 検査結果で inspection_camera_shots を UPDATE
+    // (status は必須、details と captured_at は任意)
     const updateQuery = `
       UPDATE inspection_camera_shots
-      SET
-        status = $1,
-        details = $2
-        ${imageFile ? ', image_path = $3' : ''} 
-      WHERE
-        id = ${imageFile ? '$4' : '$3'};
+      SET 
+        status = $1, 
+        details = $2,
+        -- captured_at がJSONになければ、DBの既存の値をそのまま使う
+        captured_at = COALESCE($3, captured_at) 
+      WHERE 
+        id = $4;
     `;
-    
-    const queryParams = imageFile
-      ? [status, details, newImagePath, shotDbId] // ★ newImagePath (ファイル名のみ) を使用
-      : [status, details, shotDbId];
+    await client.query(updateQuery, [
+      status,       // $1
+      details || null, // $2
+      captured_at || null, // $3
+      shotId        // $4
+    ]);
 
-    await db.query(updateQuery, queryParams);
-    await db.query('COMMIT');
+    await client.query('COMMIT'); // --- トランザクション確定 ---
 
-    // --- 7. 成功レスポンス (★修正) ---
+    // 9. 成功レスポンス (200 OK)
     return NextResponse.json(
       {
-        "message": "検査結果、受信したよ！",
-        // ★ 画像が更新されなくても、元のファイル名を返すように修正
-        "filename": filename 
+        message: "検査結果、更新しときました！🎉",
+        filename: filename
       },
       { status: 200 }
     );
 
   } catch (error) {
-    await db.query('ROLLBACK');
-    console.error(`[API ERROR] /api/ingress/inspection/result/${filename}:`, error);
-    return NextResponse.json({ "error": "Internal Server Error", "details": error.message }, { status: 500 });
+    if (client) {
+      await client.query('ROLLBACK'); // --- エラー時ロールバック ---
+    }
+    console.error('API Error (PUT ingress/inspection/result/{filename}):', error);
+    
+    return NextResponse.json(
+      { error: 'Internal Server Error', details: error.message },
+      { status: 500 }
+    );
+  } finally {
+    if (client) {
+      client.release(); // 接続をプールに返却
+    }
   }
 }
