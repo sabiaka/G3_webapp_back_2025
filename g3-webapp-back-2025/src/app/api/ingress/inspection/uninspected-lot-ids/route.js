@@ -1,60 +1,69 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db'; // DB接続 (db.queryが直接使えることを想定)
-import { URL } from 'url';
+import pool from '@/lib/db'; // 修正済みのDB接続プール
 
 /**
- * 9. 未検査ロットIDと画像ファイルパスの取得 (GET)
- * ?section=... クエリに基づいて、'MISSING' のショットを返す
+ * API: 9. 未検査ロットIDと画像ファイルパスの取得
+ * (GET /api/ingress/inspection/uninspected-lot-ids?section={section})
  */
 export async function GET(request) {
+  
   try {
-    // 1. URLからクエリパラメータを取得
-    // 'request.url' から 'searchParams' を正しく取得
+    // 1. クエリパラメータ（section）を取得
     const { searchParams } = new URL(request.url);
     const section = searchParams.get('section');
 
-    // 2. section パラメータのバリデーション
+    // 2. バリデーション (section は必須)
     if (!section) {
       return NextResponse.json(
-        { "error": "Bad Request", "details": "クエリパラメータ 'section' は必須です。" },
+        { error: "Bad Request", details: ["クエリパラメータ 'section' は必須です。"] },
+        { status: 400 }
+      );
+    }
+    if (section !== 'spring' && section !== 'alayer') {
+      return NextResponse.json(
+        { error: "Bad Request", details: ["'section' は 'spring' または 'alayer' を指定してください。"] },
         { status: 400 }
       );
     }
 
     // 3. DBクエリの実行
-    // 'inspection_lots' と 'inspection_camera_shots' を結合
-    // 'section_code' と 'status' で絞り込み、'lot_id' ごとに 'image_path' を配列にまとめる
+    // (JOINして 'section' で絞り込み、'MISSING' ステータス のものを検索)
     const query = `
       SELECT
-        l.lot_id,
-        json_agg(s.image_path) AS image_paths
+          l.lot_id,
+          -- 'MISSING' 状態の image_path を配列として集約
+          -- (NULLでないパスのみを集約)
+          COALESCE(
+            ARRAY_AGG(s.image_path) FILTER (WHERE s.image_path IS NOT NULL), 
+            '{}'::TEXT[] -- 1件もパスがない場合は空配列 '{}' を返す
+          ) AS image_paths
       FROM
-        inspection_lots AS l
-      JOIN
-        inspection_camera_shots AS s ON l.id = s.lot_id_ref
+          inspection_camera_shots s
+      INNER JOIN
+          inspection_lots l ON s.lot_id_ref = l.id
       WHERE
-        l.section_code = $1
-        AND s.status = 'MISSING'
+          l.section_code = $1     -- 1. 'section' で絞り込み
+          AND s.status = 'MISSING'  -- 2. "未検査" ('MISSING') で絞り込み
       GROUP BY
-        l.lot_id
+          l.lot_id, l.captured_at
       ORDER BY
-        l.lot_id;
+          l.captured_at ASC;      -- 3. 古い順 (昇順)
     `;
+    
+    const result = await pool.query(query, [section]);
 
-    const result = await db.query(query, [section]);
-
-    // 4. 成功レスポンスを返す
-    // result.rows は [ { lot_id: "...", image_paths: [...] }, ... ] という形になっている
-    return NextResponse.json(
-      { "lots": result.rows },
-      { status: 200 }
-    );
+    // 4. 成功レスポンス (設計書通りの { "lots": [...] } 形式)
+    return NextResponse.json({
+      lots: result.rows 
+    });
 
   } catch (error) {
-    console.error('[API ERROR] /api/ingress/inspection/uninspected-lot-ids:', error);
+    console.error('API Error (GET uninspected-lot-ids):', error);
+    
     return NextResponse.json(
-      { "error": "Internal Server Error", "details": error.message },
+      { error: 'Internal Server Error', details: error.message },
       { status: 500 }
     );
   }
+  // (pool.connect() ではなく pool.query() を使ったため、client.release() は不要)
 }
