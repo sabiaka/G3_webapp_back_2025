@@ -156,10 +156,12 @@ CREATE TABLE inspection_camera_shots (
     id BIGSERIAL PRIMARY KEY,                                                   -- ショット内部ID（連番）
     lot_id_ref BIGINT NOT NULL REFERENCES inspection_lots(id) ON DELETE CASCADE,-- ロット参照ID
     camera_id VARCHAR(64) NOT NULL,                                             -- カメラID（例: 'B-spring01', 'A-main01'）
+    c4k_seq VARCHAR(32) NULL,                                                    -- 設計書6用
+    fhd_seq VARCHAR(32) NULL,                                                   -- 設計書6用
+    shot_seq INT NULL,                                            -- 同一カメラ内の通番（1..n）
     status VARCHAR(16) NOT NULL CHECK (status IN ('PASS','FAIL','MISSING')),    -- 判定ステータス
     details TEXT NULL,                                                          -- 不良理由等（PASS時はNULL推奨）
     image_path TEXT NULL,                                                       -- 画像パス（MISSING時はNULL可）
-    shot_seq INT NOT NULL DEFAULT 1,                                            -- 同一カメラ内の通番（1..n）
     captured_at TIMESTAMP WITH TIME ZONE NULL                                   -- ショット撮影時刻
 );
 

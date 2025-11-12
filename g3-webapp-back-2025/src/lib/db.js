@@ -72,4 +72,5 @@ pool.on('connect', (client) => {
 
 export default {
   query: (text, params) => pool.query(text, params),
+  connect: () => pool.connect(), // ★ 変更点: トランザクション用に connect 関数を追加
 };
