@@ -1,46 +1,64 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db'; // DB接続 (db.queryが直接使えることを想定)
+import pool from '@/lib/db'; // 修正済みのDB接続プール
 
 /**
- * 11. 現在生産中の lot_id を取得
- * (DB内で captured_at が最新の lot_id を1件返す)
+ * API: 11. 現在生産中の lot_id を取得
+ * (GET /api/ingress/inspection/current-lot?section={section})
  */
 export async function GET(request) {
+  
   try {
-    // 1. DBから captured_at が最新の lot_id を1件取得
+    // 1. クエリパラメータ（section）を取得
+    const { searchParams } = new URL(request.url);
+    const section = searchParams.get('section');
+
+    // 2. バリデーション (section は必須)
+    if (!section) {
+      return NextResponse.json(
+        { error: "Bad Request", details: ["クエリパラメータ 'section' は必須です。"] },
+        { status: 400 }
+      );
+    }
+    if (section !== 'spring' && section !== 'alayer') {
+      return NextResponse.json(
+        { error: "Bad Request", details: ["'section' は 'spring' または 'alayer' を指定してください。"] },
+        { status: 400 }
+      );
+    }
+
+    // 3. DBクエリの実行
+    // (API 5 と同じロジックで、指定セクションの "最新" の lot_id を1件取得)
     const query = `
-      SELECT lot_id
+      SELECT lot_id 
       FROM inspection_lots
+      WHERE section_code = $1
       ORDER BY captured_at DESC
       LIMIT 1;
     `;
     
-    const result = await db.query(query);
+    const result = await pool.query(query, [section]);
 
-    // 2. 結果のハンドリング
+    // 4. 成功レスポンス (200 OK または 204 No Content)
     if (result.rows.length > 0) {
-      // --- 200 OK: 見つかった場合 ---
-      const currentLot = result.rows[0]; // { lot_id: "MAT-00123" }
-      return NextResponse.json(
-        { "lot_id": currentLot.lot_id },
-        { status: 200 }
-      );
+      // 見つかった場合 (200 OK)
+      return NextResponse.json({
+        lot_id: result.rows[0].lot_id
+      });
     } else {
-      // --- 204 NG: 見つからない場合 (仕様書通り) ---
-      // (注: 仕様書では 204 となっていますが、
-      // 200 OK でメッセージを返す方がクライアント側は扱いやすいです)
-      // ここでは仕様書通り 204 で返します。
+      // 見つからなかった場合 (204 No Content)
       return NextResponse.json(
-        { "message": "現在生産しているロットはありません。" },
-        { status: 204 } 
+        { message: "現在生産しているロットはありません。" },
+        { status: 204 } // 204 はボディを持たないのが一般的だが、設計書 に合わせてJSONを返す
       );
     }
 
   } catch (error) {
-    console.error('[API ERROR] /api/ingress/inspection/current-lot:', error);
+    console.error('API Error (GET current-lot):', error);
+    
     return NextResponse.json(
-      { "error": "Internal Server Error", "details": error.message },
+      { error: 'Internal Server Error', details: error.message },
       { status: 500 }
     );
   }
+  // (pool.connect() ではなく pool.query() を使ったため、client.release() は不要)
 }
