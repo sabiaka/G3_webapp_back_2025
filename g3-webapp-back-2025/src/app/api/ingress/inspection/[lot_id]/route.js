@@ -34,11 +34,65 @@ export async function POST(request, { params }) {
 
     // 4. metadata (JSON) をパース
     let metadata;
+    let metadataText;
     try {
-      metadata = JSON.parse(metadataJson);
+      // FormData から取得した値が Blob/File の可能性もあるため、文字列化を安全に行う
+      metadataText = typeof metadataJson === 'string'
+        ? metadataJson
+        : (metadataJson && typeof metadataJson.text === 'function'
+            ? await metadataJson.text()
+            : String(metadataJson));
+      metadata = JSON.parse(metadataText);
     } catch (e) {
+      // 可能な範囲で、エラー位置や周辺スニペットなどの詳細を返す
+      const errMsg = (e && e.message) ? e.message : 'JSON パースエラー';
+      let position;
+      let line;
+      let column;
+      let snippet;
+
+      try {
+        // Node の JSON.parse エラーは "in JSON at position <n>" を含むことが多い
+        const match = /position\s+(\d+)/i.exec(errMsg);
+        const index = match ? Number(match[1]) : undefined;
+        const text = metadataText ?? (typeof metadataJson === 'string' ? metadataJson : '');
+
+        if (Number.isFinite(index) && typeof text === 'string' && text.length > 0) {
+          // 行・列を計算（1始まり）
+          let l = 1, c = 1;
+          for (let i = 0; i < index && i < text.length; i++) {
+            if (text[i] === '\n') { l++; c = 1; } else { c++; }
+          }
+          position = index;
+          line = l;
+          column = c;
+
+          // エラー周辺の短いスニペット（最大 ~80 文字 + ポインタ）
+          const CONTEXT = 40;
+          const start = Math.max(0, index - CONTEXT);
+          const end = Math.min(text.length, index + CONTEXT);
+          const prefix = start > 0 ? '…' : '';
+          const suffix = end < text.length ? '…' : '';
+          const segment = text.slice(start, end);
+          const pointer = ' '.repeat(Math.max(0, index - start)) + '^';
+          snippet = `${prefix}${segment}${suffix}\n${pointer}`;
+        }
+      } catch (_) {
+        // 解析に失敗した場合は詳細なしで返す
+      }
+
       return NextResponse.json(
-        { error: "Bad Request", details: "metadata が有効な JSON ではありません。" },
+        {
+          error: "Bad Request",
+          details: "metadata が有効な JSON ではありません。",
+          parse_error: {
+            message: errMsg,
+            position,
+            line,
+            column,
+            snippet,
+          },
+        },
         { status: 400 }
       );
     }
