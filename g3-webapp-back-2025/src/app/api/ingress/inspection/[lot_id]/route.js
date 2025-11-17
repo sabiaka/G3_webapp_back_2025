@@ -12,22 +12,33 @@ const SAVE_DIR = path.join(process.cwd(), 'public', IMAGE_DIR);
  * API: 6. 【検査前】画像アップロード（lot_id指定・単発）(A層検査用)
  * (POST /api/ingress/inspection/{lot_id})
  */
-export async function POST(request, { params }) {
+export async function POST(request, context) {
   let client; // DBクライアント
 
   try {
+    // Next.js 15: context.params を await する！
+    const params = await context.params;
+
     // 1. パスパラメータ（{lot_id}）を取得
-    const lotId = params.lot_id; // (例: "MAT-00125")
+    const lotId = params.lot_id; // これで "MAT-00125" とか取れるよ！🙆‍♀️
 
     // 2. multipart/form-data をパース
     const formData = await request.formData();
     const metadataJson = formData.get('metadata');
     const imageFile = formData.get('image');
 
-    // 3. バリデーション
-    if (!metadataJson || !imageFile) {
+    // 3. バリデーション: multipart の必須パーツ
+    const missingFormParts = [];
+    if (!metadataJson) missingFormParts.push('metadata');
+    if (!imageFile) missingFormParts.push('image');
+
+    if (missingFormParts.length > 0) {
       return NextResponse.json(
-        { error: "Bad Request", details: "リクエストに 'metadata' (JSON) と 'image' (ファイル) の両方が必要です。" },
+        {
+          error: "Bad Request",
+          details: "multipart/form-data に必須パーツが不足しています。",
+          missing_form_parts: missingFormParts,
+        },
         { status: 400 }
       );
     }
@@ -98,15 +109,45 @@ export async function POST(request, { params }) {
     }
 
     // 5. metadata の内容を検証 (API 6 の仕様)
-    //    設計書の '4K_seq' キーを 'c4k_seq' (DBカラム名) にマッピング
-    const { camera_id, '4K_seq': c4k_seq, 'FHD_seq': fhd_seq, captured_at, section_code } = metadata;
-    
-    if (!camera_id || !c4k_seq || !fhd_seq || !section_code) {
+    if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
       return NextResponse.json(
-        { error: "Bad Request", details: "metadata に 'camera_id', '4K_seq', 'FHD_seq', 'section_code' が必要です。" },
+        {
+          error: "Bad Request",
+          details: "metadata はオブジェクト形式で指定してください。",
+          received_type: Array.isArray(metadata) ? 'array' : typeof metadata,
+        },
         { status: 400 }
       );
     }
+
+    const metadataRequirements = [
+      { field: 'camera_id', label: 'camera_id' },
+      { field: '4K_seq', label: '4K_seq' },
+      { field: 'FHD_seq', label: 'FHD_seq' },
+      { field: 'section_code', label: 'section_code' },
+    ];
+
+    const missingMetadataFields = metadataRequirements
+      .filter(({ field }) => {
+        const value = metadata[field];
+        return value === undefined || value === null || value === '';
+      })
+      .map(({ label }) => label);
+
+    if (missingMetadataFields.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Bad Request",
+          details: "metadata の必須項目が不足しています。",
+          missing_fields: missingMetadataFields,
+          received_metadata_keys: Object.keys(metadata),
+        },
+        { status: 400 }
+      );
+    }
+
+    //    設計書の '4K_seq' キーを 'c4k_seq' (DBカラム名) にマッピング
+    const { camera_id, '4K_seq': c4k_seq, 'FHD_seq': fhd_seq, captured_at, section_code } = metadata;
 
     // 6. DBに接続
     client = await pool.connect();
