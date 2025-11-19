@@ -13,10 +13,11 @@ const SAVE_DIR_AFTER = path.join(process.cwd(), 'public', IMAGE_DIR_AFTER);
  * API: 10. 検査結果一括登録(ばねどめ検査用)
  * (POST /api/ingress/inspection/batch/{lot_id})
  */
-export async function POST(request, { params }) {
+export async function POST(request, context) {
   const client = await pool.connect(); // 3つの処理(DB+画像x2)のためトランザクション
   
   try {
+    const { params } = await context;
     // 1. パスパラメータ（{lot_id}）を取得
     const lotIdFromPath = params.lot_id; // (例: "MAT-00123")
 

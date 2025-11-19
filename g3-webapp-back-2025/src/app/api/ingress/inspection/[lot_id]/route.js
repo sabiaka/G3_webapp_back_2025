@@ -12,47 +12,142 @@ const SAVE_DIR = path.join(process.cwd(), 'public', IMAGE_DIR);
  * API: 6. 【検査前】画像アップロード（lot_id指定・単発）(A層検査用)
  * (POST /api/ingress/inspection/{lot_id})
  */
-export async function POST(request, { params }) {
+export async function POST(request, context) {
   let client; // DBクライアント
 
   try {
+    // Next.js 15: context.params を await する！
+    const params = await context.params;
+
     // 1. パスパラメータ（{lot_id}）を取得
-    const lotId = params.lot_id; // (例: "MAT-00125")
+    const lotId = params.lot_id; // これで "MAT-00125" とか取れるよ！🙆‍♀️
 
     // 2. multipart/form-data をパース
     const formData = await request.formData();
     const metadataJson = formData.get('metadata');
     const imageFile = formData.get('image');
 
-    // 3. バリデーション
-    if (!metadataJson || !imageFile) {
+    // 3. バリデーション: multipart の必須パーツ
+    const missingFormParts = [];
+    if (!metadataJson) missingFormParts.push('metadata');
+    if (!imageFile) missingFormParts.push('image');
+
+    if (missingFormParts.length > 0) {
       return NextResponse.json(
-        { error: "Bad Request", details: "リクエストに 'metadata' (JSON) と 'image' (ファイル) の両方が必要です。" },
+        {
+          error: "Bad Request",
+          details: "multipart/form-data に必須パーツが不足しています。",
+          missing_form_parts: missingFormParts,
+        },
         { status: 400 }
       );
     }
 
     // 4. metadata (JSON) をパース
     let metadata;
+    let metadataText;
     try {
-      metadata = JSON.parse(metadataJson);
+      // FormData から取得した値が Blob/File の可能性もあるため、文字列化を安全に行う
+      metadataText = typeof metadataJson === 'string'
+        ? metadataJson
+        : (metadataJson && typeof metadataJson.text === 'function'
+            ? await metadataJson.text()
+            : String(metadataJson));
+      metadata = JSON.parse(metadataText);
     } catch (e) {
+      // 可能な範囲で、エラー位置や周辺スニペットなどの詳細を返す
+      const errMsg = (e && e.message) ? e.message : 'JSON パースエラー';
+      let position;
+      let line;
+      let column;
+      let snippet;
+
+      try {
+        // Node の JSON.parse エラーは "in JSON at position <n>" を含むことが多い
+        const match = /position\s+(\d+)/i.exec(errMsg);
+        const index = match ? Number(match[1]) : undefined;
+        const text = metadataText ?? (typeof metadataJson === 'string' ? metadataJson : '');
+
+        if (Number.isFinite(index) && typeof text === 'string' && text.length > 0) {
+          // 行・列を計算（1始まり）
+          let l = 1, c = 1;
+          for (let i = 0; i < index && i < text.length; i++) {
+            if (text[i] === '\n') { l++; c = 1; } else { c++; }
+          }
+          position = index;
+          line = l;
+          column = c;
+
+          // エラー周辺の短いスニペット（最大 ~80 文字 + ポインタ）
+          const CONTEXT = 40;
+          const start = Math.max(0, index - CONTEXT);
+          const end = Math.min(text.length, index + CONTEXT);
+          const prefix = start > 0 ? '…' : '';
+          const suffix = end < text.length ? '…' : '';
+          const segment = text.slice(start, end);
+          const pointer = ' '.repeat(Math.max(0, index - start)) + '^';
+          snippet = `${prefix}${segment}${suffix}\n${pointer}`;
+        }
+      } catch (_) {
+        // 解析に失敗した場合は詳細なしで返す
+      }
+
       return NextResponse.json(
-        { error: "Bad Request", details: "metadata が有効な JSON ではありません。" },
+        {
+          error: "Bad Request",
+          details: "metadata が有効な JSON ではありません。",
+          parse_error: {
+            message: errMsg,
+            position,
+            line,
+            column,
+            snippet,
+          },
+        },
         { status: 400 }
       );
     }
 
     // 5. metadata の内容を検証 (API 6 の仕様)
-    //    設計書の '4K_seq' キーを 'c4k_seq' (DBカラム名) にマッピング
-    const { camera_id, '4K_seq': c4k_seq, 'FHD_seq': fhd_seq, captured_at, section_code } = metadata;
-    
-    if (!camera_id || !c4k_seq || !fhd_seq || !section_code) {
+    if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
       return NextResponse.json(
-        { error: "Bad Request", details: "metadata に 'camera_id', '4K_seq', 'FHD_seq', 'section_code' が必要です。" },
+        {
+          error: "Bad Request",
+          details: "metadata はオブジェクト形式で指定してください。",
+          received_type: Array.isArray(metadata) ? 'array' : typeof metadata,
+        },
         { status: 400 }
       );
     }
+
+    const metadataRequirements = [
+      { field: 'camera_id', label: 'camera_id' },
+      { field: '4K_seq', label: '4K_seq' },
+      { field: 'FHD_seq', label: 'FHD_seq' },
+      { field: 'section_code', label: 'section_code' },
+    ];
+
+    const missingMetadataFields = metadataRequirements
+      .filter(({ field }) => {
+        const value = metadata[field];
+        return value === undefined || value === null || value === '';
+      })
+      .map(({ label }) => label);
+
+    if (missingMetadataFields.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Bad Request",
+          details: "metadata の必須項目が不足しています。",
+          missing_fields: missingMetadataFields,
+          received_metadata_keys: Object.keys(metadata),
+        },
+        { status: 400 }
+      );
+    }
+
+    //    設計書の '4K_seq' キーを 'c4k_seq' (DBカラム名) にマッピング
+    const { camera_id, '4K_seq': c4k_seq, 'FHD_seq': fhd_seq, captured_at, section_code } = metadata;
 
     // 6. DBに接続
     client = await pool.connect();
