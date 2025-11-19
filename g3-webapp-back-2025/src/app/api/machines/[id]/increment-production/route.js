@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // データベース接続プール
 
+const INITIAL_LOT_SEQUENCE = '00001';
+
+function getLotPrefix(section) {
+  if (section === 'spring') return 'MAT-';
+  if (section === 'alayer') return 'LOLL-';
+  throw new Error(`未対応のセクションです: ${section}`);
+}
+
 /**
  * lot_idの数値部分をインクリメントして新しいIDを生成する
  * (例: "MAT-00123" -> "MAT-00124")
@@ -97,19 +105,16 @@ export async function POST(request, { params }) {
     `;
     const currentLotResult = await client.query(getCurrentLotQuery, [section]);
 
+    const lotPrefix = getLotPrefix(section);
+    let newLotId;
+
     if (currentLotResult.rows.length === 0) {
-      // 該当セクションにロットが1件も存在しない
-      await client.query('ROLLBACK');
-      return NextResponse.json(
-        { error: "No active lot", details: "指定セクションに現在生産中のロットがありません。" },
-        { status: 409 }
-      );
+      // 既存ロットが無ければ 00001 から開始
+      newLotId = `${lotPrefix}${INITIAL_LOT_SEQUENCE}`;
+    } else {
+      const currentLotId = currentLotResult.rows[0].lot_id; // (例: "MAT-00123")
+      newLotId = getNextLotId(currentLotId); // (例: "MAT-00124")
     }
-    
-    const currentLotId = currentLotResult.rows[0].lot_id; // (例: "MAT-00123")
-    
-    // 5. (処理C) 新しい lot_id を生成
-    const newLotId = getNextLotId(currentLotId); // (例: "MAT-00124")
 
     // 6. (処理D) 新しい lot_id で inspection_lots に "新行" を作成
     const createNewLotQuery = `
