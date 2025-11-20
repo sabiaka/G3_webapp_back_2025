@@ -4,10 +4,10 @@ import pool from '@/lib/db';
 /**
  * API: 検査ステータスのリセット
  * 指定された lot_id のショットのうち、status が 'MISSING' 以外のものを 'MISSING' に戻し、details を NULL にする。
- * (POST /api/ingress/inspection/{lot_id}/reset)
+ * (PUT /api/ingress/inspection/{lot_id}/reset)
  */
-export async function POST(request, context) {
-  const { lot_id } = await context.params;
+export async function PUT(request, { params }) {
+  const { lot_id } = params;
 
   try {
     // 1. lot_id (文字列) から 親ロットの内部ID (lot_id_ref) を検索
@@ -46,7 +46,7 @@ export async function POST(request, context) {
     });
 
   } catch (error) {
-    console.error(`API Error (POST /inspection/${lot_id}/reset):`, error);
+    console.error(`API Error (PUT /inspection/${lot_id}/reset):`, error);
     return NextResponse.json(
       { error: 'Internal Server Error', details: error.message },
       { status: 500 }
