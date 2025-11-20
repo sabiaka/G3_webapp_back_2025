@@ -1,25 +1,27 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // 修正済みのDB接続プール
-import { writeFile, mkdir } from 'fs/promises'; // 画像保存用 (Node.js v14+)
+import { writeFile, mkdir, unlink } from 'fs/promises'; // 画像保存・削除用
 import path from 'path'; // パス結合用
 
-// 設計書（セクション6）に基づく画像保存ディレクトリ
-const IMAGE_DIR = '/imageDB/beforeTest/'; 
-// サーバーのファイルシステム上の絶対パス (Next.jsの public ディレクトリを想定)
-const SAVE_DIR = path.join(process.cwd(), 'public', IMAGE_DIR);
+// --- 定数 ---
+// API 6 (POST) の保存先フォルダ
+const IMAGE_DIR_BEFORE = '/imageDB/beforeTest/'; 
+const SAVE_DIR_BEFORE = path.join(process.cwd(), 'public', IMAGE_DIR_BEFORE);
+// API 13 (DELETE) で使用するフォルダ
+const BASE_DIR = path.join(process.cwd(), 'public'); 
 
+// ------------------------------------------------------------
+// 1. POST 関数 (API 6: 【検査前】画像アップロード)
+// ------------------------------------------------------------
 /**
  * API: 6. 【検査前】画像アップロード（lot_id指定・単発）(A層検査用)
  * (POST /api/ingress/inspection/{lot_id})
  */
 export async function POST(request, { params }) {
-  let client; // DBクライアント
+  let client; 
+  const lotId = params.lot_id; 
 
   try {
-    // 1. パスパラメータ（{lot_id}）を取得
-    const lotId = params.lot_id; // (例: "MAT-00125")
-
-    // 2. multipart/form-data をパース
     const formData = await request.formData();
     const metadataJson = formData.get('metadata');
     const imageFile = formData.get('image');
@@ -37,14 +39,10 @@ export async function POST(request, { params }) {
     try {
       metadata = JSON.parse(metadataJson);
     } catch (e) {
-      return NextResponse.json(
-        { error: "Bad Request", details: "metadata が有効な JSON ではありません。" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Bad Request", details: "metadata が有効な JSON ではありません。" }, { status: 400 });
     }
 
     // 5. metadata の内容を検証 (API 6 の仕様)
-    //    設計書の '4K_seq' キーを 'c4k_seq' (DBカラム名) にマッピング
     const { camera_id, '4K_seq': c4k_seq, 'FHD_seq': fhd_seq, captured_at, section_code } = metadata;
     
     if (!camera_id || !c4k_seq || !fhd_seq || !section_code) {
@@ -58,7 +56,6 @@ export async function POST(request, { params }) {
     client = await pool.connect();
 
     // 7. (DB処理 1) パスの lot_id から inspection_lots の主キー (id) を取得
-    //    (lot_id と section_code の両方が一致するものを探す)
     const lotResult = await client.query(
       'SELECT id FROM inspection_lots WHERE lot_id = $1 AND section_code = $2',
       [lotId, section_code]
@@ -70,43 +67,28 @@ export async function POST(request, { params }) {
         { status: 404 }
       );
     }
-    const lotIdRef = lotResult.rows[0].id; // これが inspection_camera_shots に使う lot_id_ref
+    const lotIdRef = lotResult.rows[0].id; 
 
     // 8. ファイル名を生成 (設計書セクション6のルール)
-    // (例: MAT-00125_B-spring01_A-4_D-5.png)
     const filename = `${lotId}_${camera_id}_${c4k_seq}_${fhd_seq}.png`;
     
     // 9. 画像ファイルをサーバーに保存
     const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
-    const savePath = path.join(SAVE_DIR, filename);
+    const savePath = path.join(SAVE_DIR_BEFORE, filename); // 検査前フォルダに保存
     
-    // (ディレクトリが存在しない場合に備えて作成)
-    await mkdir(SAVE_DIR, { recursive: true });
-    
+    await mkdir(SAVE_DIR_BEFORE, { recursive: true });
     await writeFile(savePath, imageBuffer);
 
     // 10. (DB処理 2) inspection_camera_shots にデータを INSERT
-    // (注意: 検査前データは status: 'MISSING' (未検査) として登録)
-    const imageDbPath = path.join(IMAGE_DIR, filename).replace(/\\/g, '/'); // DBには /imageDB/... のパスを保存
+    const imageDbPath = path.join(IMAGE_DIR_BEFORE, filename).replace(/\\/g, '/');
     const insertQuery = `
       INSERT INTO inspection_camera_shots (
-        lot_id_ref, 
-        camera_id, 
-        c4k_seq,      -- c4k_seq カラム
-        fhd_seq,      -- fhd_seq カラム
-        status,       -- 'MISSING' (未検査)
-        image_path,   -- 保存した画像のパス
-        captured_at   -- メタデータから取得した撮影時刻
+        lot_id_ref, camera_id, c4k_seq, fhd_seq, status, image_path, captured_at
       )
       VALUES ($1, $2, $3, $4, 'MISSING', $5, $6);
     `;
     await client.query(insertQuery, [
-      lotIdRef,
-      camera_id,
-      c4k_seq,
-      fhd_seq,
-      imageDbPath,
-      captured_at || new Date() // captured_at がなければ現在時刻
+      lotIdRef, camera_id, c4k_seq, fhd_seq, imageDbPath, captured_at || new Date()
     ]);
 
     // 11. 成功レスポンス (201 Created)
@@ -122,14 +104,105 @@ export async function POST(request, { params }) {
   } catch (error) {
     console.error('API Error (POST ingress/inspection/{lot_id}):', error);
     
-    // DBエラーなど
     return NextResponse.json(
       { error: 'Internal Server Error', details: error.message },
       { status: 500 }
     );
   } finally {
     if (client) {
-      client.release(); // 接続をプールに返却
+      client.release();
     }
+  }
+}
+
+// ------------------------------------------------------------
+// 2. DELETE 関数 (API 13: 特定ロットの削除)
+// ------------------------------------------------------------
+/**
+ * API: 13. 特定ロットの削除 (DB + 画像ファイル)
+ * (DELETE /api/ingress/inspection/{lot_id})
+ *
+ */
+export async function DELETE(request, { params }) {
+  const client = await pool.connect(); // トランザクションのために接続を専有
+  const lotId = params.lot_id; // URLパスから {lot_id} を取得
+  
+  try {
+    // 1. トランザクション開始
+    await client.query('BEGIN');
+
+    // 2. lot_id から親ロットの内部ID (lot_id_ref) を取得
+    const lotResult = await client.query(
+      'SELECT id FROM inspection_lots WHERE lot_id = $1',
+      [lotId]
+    );
+
+    if (lotResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return NextResponse.json(
+        { error: "Not Found", details: `指定された lot_id (${lotId}) が見つかりません。` },
+        { status: 404 }
+      );
+    }
+    const lotIdRef = lotResult.rows[0].id; // 親ロットの内部ID
+
+    // 3. 削除対象となる画像パスをすべて取得
+    const shotsResult = await client.query(
+      'SELECT image_path FROM inspection_camera_shots WHERE lot_id_ref = $1 AND image_path IS NOT NULL',
+      [lotIdRef]
+    );
+    const imagePaths = shotsResult.rows.map(row => row.image_path);
+    
+    // 4. 物理ファイル削除 (検査前 / 検査後)
+    let deleteCount = 0;
+    
+    for (const dbPath of imagePaths) {
+      // a. 検査前画像パスを構築
+      const beforePath = path.join(BASE_DIR, dbPath);
+      // b. 検査後画像パスを構築 (beforeTest -> afterTest に置換)
+      const afterPath = path.join(BASE_DIR, dbPath.replace('beforeTest', 'afterTest'));
+
+      // ★ ファイルが存在しなくても API は成功させる ★
+      try {
+        await unlink(beforePath); // 検査前画像を削除
+        deleteCount++;
+      } catch (e) {
+        if (e.code !== 'ENOENT') { console.error(`[DELETE] Error deleting BEFORE image (${beforePath}):`, e); }
+      }
+      
+      try {
+        await unlink(afterPath); // 検査後画像を削除
+        deleteCount++;
+      } catch (e) {
+        if (e.code !== 'ENOENT') { console.error(`[DELETE] Error deleting AFTER image (${afterPath}):`, e); }
+      }
+    }
+
+    // 5. データベースからデータを削除
+    // inspection_lots を削除すれば ON DELETE CASCADE で子テーブルも自動削除
+    const deleteLotQuery = 'DELETE FROM inspection_lots WHERE id = $1';
+    await client.query(deleteLotQuery, [lotIdRef]);
+
+    // 6. トランザクション確定
+    await client.query('COMMIT'); 
+
+    // 7. 成功レスポンス
+    return NextResponse.json(
+      { message: `ロット ${lotId} を削除しました。`, deleted_files: deleteCount },
+      { status: 200 }
+    );
+
+  } catch (error) {
+    // 予期せぬDBエラーやファイルパス生成エラーなどが発生した場合
+    await client.query('ROLLBACK'); 
+
+    // 予期せぬエラーは 500 を返す
+    console.error(`API Fatal Error (DELETE lot ${lotId}):`, error);
+    return NextResponse.json(
+      { error: 'Internal Server Error', details: 'ファイル削除処理中に予期せぬエラーが発生しました。' },
+      { status: 500 }
+    );
+  } finally {
+    client.release(); // 接続をプールに返却
   }
 }
