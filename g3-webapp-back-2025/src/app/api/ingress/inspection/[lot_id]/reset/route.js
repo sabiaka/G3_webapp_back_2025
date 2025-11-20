@@ -6,8 +6,8 @@ import pool from '@/lib/db';
  * 指定された lot_id のショットのうち、status が 'MISSING' 以外のものを 'MISSING' に戻し、details を NULL にする。
  * (POST /api/ingress/inspection/{lot_id}/reset)
  */
-export async function POST(request, { params }) {
-  const { lot_id } = params;
+export async function POST(request, context) {
+  const { lot_id } = await context.params;
 
   try {
     // 1. lot_id (文字列) から 親ロットの内部ID (lot_id_ref) を検索

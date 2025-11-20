@@ -5,8 +5,8 @@ import db from '@/lib/db'; // 既存のDB接続をインポート
  * 1. 特定の日報取得 (GET /api/reports/{id})
  * @description 従業員APIのGET(一覧)のSELECTクエリを参考に、単一IDで取得
  */
-export async function GET(request, { params }) {
-  const { id } = params;
+export async function GET(request, context) {
+  const { id } = await context.params;
   
   try {
     const reportId = parseInt(id, 10);
@@ -62,8 +62,8 @@ export async function GET(request, { params }) {
  * 2. 特定の日報を更新するAPI (PUT /api/reports/{id})
  * @description 従業員APIのPOSTのロジックを参考にUPDATEを実装
  */
-export async function PUT(request, { params }) {
-  const { id } = params;
+export async function PUT(request, context) {
+  const { id } = await context.params;
 
   try {
     const reportId = parseInt(id, 10);
@@ -155,8 +155,8 @@ export async function PUT(request, { params }) {
  * 3. 特定の日報を削除するAPI (DELETE /api/reports/{id})
  * @description 従業員APIにないため、標準的なDELETE処理を実装
  */
-export async function DELETE(request, { params }) {
-  const { id } = params;
+export async function DELETE(request, context) {
+  const { id } = await context.params;
 
   try {
     const reportId = parseInt(id, 10);

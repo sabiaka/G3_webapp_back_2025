@@ -12,13 +12,13 @@ const SAVE_DIR_AFTER = path.join(process.cwd(), 'public', IMAGE_DIR_AFTER);
  * API: 7. 【検査後】結果と画像の送信（filename指定・単発）
  * (PUT /api/ingress/inspection/result/{filename})
  */
-export async function PUT(request, { params }) {
+export async function PUT(request, context) {
   const client = await pool.connect(); // トランザクションのために接続を専有
   
   try {
     // 1. パスパラメータ（{filename}）を取得
     // (例: "LOLL-10031_A-main01_A-1_B-1.png")
-    const filename = params.filename; 
+    const { filename } = await context.params; 
 
     // 2. multipart/form-data をパース
     const formData = await request.formData();
