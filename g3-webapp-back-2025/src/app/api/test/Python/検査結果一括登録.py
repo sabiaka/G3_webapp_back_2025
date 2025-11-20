@@ -40,10 +40,28 @@ def save_config(data: dict):
         pass
 
 
+def _normalize_base_host(value: str) -> str:
+    """ホストのみのベースURLへ正規化する（例: http://localhost:3001）。
+    もし '/api/ingress/inspection' などの固定パスが含まれていたら取り除く。
+    """
+    default_host = 'http://10.100.54.170:3001'
+    if not value:
+        return default_host
+    trimmed = value.strip()
+    if trimmed in ('http://', 'https://', 'http:///', 'https:///'):
+        return default_host
+    # 既にパスを含む場合はホスト部だけ残す
+    prefix = '/api/ingress/inspection'
+    if prefix in trimmed:
+        trimmed = trimmed.split(prefix, 1)[0]
+    trimmed = trimmed.rstrip('/')
+    return trimmed
+
+
 class PostInspectionBulkGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title('検査結果 一括登録ツール (POST /api/ingress/inspection/{lot_id})')
+        self.title('検査結果 一括登録ツール (POST /api/ingress/inspection/batch/{lot_id})')
         self.geometry('860x700')
         self._build_widgets()
         self._load_initial_values()
@@ -54,10 +72,16 @@ class PostInspectionBulkGUI(tk.Tk):
         frm = ttk.Frame(self)
         frm.pack(fill=tk.BOTH, expand=True)
 
-        # URL base
+        # URL base（ホストのみ選択。APIパスは内部で付与）
         ttk.Label(frm, text='サーバURL (ベース)').grid(row=0, column=0, sticky='e', **pad)
-        self.url_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.url_var, width=70).grid(row=0, column=1, columnspan=2, sticky='we', **pad)
+        self.base_url_var = tk.StringVar()
+        self.base_url_choices = [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://10.100.54.170:3001',
+        ]
+        self.base_url_combo = ttk.Combobox(frm, textvariable=self.base_url_var, values=self.base_url_choices, width=70)
+        self.base_url_combo.grid(row=0, column=1, columnspan=2, sticky='we', **pad)
 
         # lot_id
         ttk.Label(frm, text='ロットID (lot_id)').grid(row=1, column=0, sticky='e', **pad)
@@ -140,7 +164,11 @@ class PostInspectionBulkGUI(tk.Tk):
 
     def _load_initial_values(self):
         cfg = load_config()
-        self.url_var.set(cfg.get('post_base_url', 'http://localhost:3000/api/ingress/inspection'))
+        loaded_base = _normalize_base_host(cfg.get('post_base_url', 'http://10.100.54.170:3001'))
+        if loaded_base not in self.base_url_choices:
+            self.base_url_choices.append(loaded_base)
+            self.base_url_combo.config(values=self.base_url_choices)
+        self.base_url_var.set(loaded_base)
         self.lot_var.set(cfg.get('post_lot_id', 'MAT-00123'))
         self.section_var.set(cfg.get('post_section_label', 'バネ留め (spring)'))
         if self.section_var.get() not in self.section_map:
@@ -177,7 +205,7 @@ class PostInspectionBulkGUI(tk.Tk):
         self.send_btn.config(state=(tk.NORMAL if enabled else tk.DISABLED))
 
     def on_send(self):
-        base = self.url_var.get().strip().rstrip('/')
+        base = _normalize_base_host(self.base_url_var.get().strip()).rstrip('/')
         lot_id = self.lot_var.get().strip()
         section_label = self.section_var.get()
         section_code = self.section_map.get(section_label)
@@ -199,7 +227,8 @@ class PostInspectionBulkGUI(tk.Tk):
             messagebox.showerror('入力エラー', 'status は必須です。')
             return
 
-        url = f"{base}/{lot_id}"
+        # 新仕様: バッチ登録エンドポイント
+        url = f"{base}/api/ingress/inspection/batch/{lot_id}"
 
         save_config({
             'post_base_url': base,
@@ -214,7 +243,6 @@ class PostInspectionBulkGUI(tk.Tk):
             'post_before_path': before_path,
             'post_after_path': after_path,
         })
-
         self.append_log('[INFO] 送信を開始します...')
         self.set_ui_enabled(False)
 
@@ -279,7 +307,7 @@ class PostInspectionBulkGUI(tk.Tk):
         except Exception:
             shot_seq = 1
         save_config({
-            'post_base_url': self.url_var.get().strip(),
+            'post_base_url': _normalize_base_host(self.base_url_var.get().strip()),
             'post_lot_id': self.lot_var.get().strip(),
             'post_section_label': self.section_var.get(),
             'camera_id': self.camera_var.get().strip(),
