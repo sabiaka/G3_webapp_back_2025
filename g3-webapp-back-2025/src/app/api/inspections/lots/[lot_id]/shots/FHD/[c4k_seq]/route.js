@@ -6,9 +6,9 @@ import pool from '@/lib/db';
  * (GET /api/inspections/lots/{lot_id}/shots/FHD/{4k_seq})
  *
  */
-export async function GET(request, { params }) {
+export async function GET(request, context) {
   // URLから {lot_id} と {c4k_seq} を取得
-  const { lot_id, c4k_seq } = params; 
+  const { lot_id, c4k_seq } = await context.params; 
   
   try {
     // 1. lot_id (文字列) から 親ロットの内部ID (lot_id_ref) を検索
