@@ -159,7 +159,8 @@ INSERT INTO machine_logs (machine_name, unit_id, timestamp, log_type, title, mes
 ('半自動表層バネどめ機', NULL, '2025-07-17 08:00:00', 'info',    'I-001: 生産機械 通電（JETSON検知）', '');
 
 
-
+INSERT INTO machine_logs (machine_name, unit_id, timestamp, log_type, title, message) VALUES
+('半自動表層バネどめ機', 1, '2025-11-13 10:08:00', 'info', 'I-000: テスト中', 'テスト中');
 
 -- inspection_results (検査画像) テーブルへの仮データ挿入
 --INSERT INTO inspection_results (
