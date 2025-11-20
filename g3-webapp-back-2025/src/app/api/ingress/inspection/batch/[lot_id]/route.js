@@ -17,9 +17,8 @@ export async function POST(request, context) {
   const client = await pool.connect(); // 3つの処理(DB+画像x2)のためトランザクション
   
   try {
-    const { params } = await context;
+    const { lot_id: lotIdFromPath } = await context.params;
     // 1. パスパラメータ（{lot_id}）を取得
-    const lotIdFromPath = params.lot_id; // (例: "MAT-00123")
 
     // 2. multipart/form-data をパース
     const formData = await request.formData();

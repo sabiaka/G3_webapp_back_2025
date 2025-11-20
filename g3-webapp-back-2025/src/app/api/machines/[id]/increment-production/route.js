@@ -42,12 +42,12 @@ function getNextLotId(currentLotId) {
  * API: 5. 生産数をインクリメント（lot_idも加算）
  * (POST /api/machines/{id}/increment-production?section={section})
  */
-export async function POST(request, { params }) {
+export async function POST(request, context) {
   const client = await pool.connect(); 
   
   try {
     // 1. パスパラメータとクエリパラメータを取得
-    const machineId = params.id; // パスから {id} を取得
+    const { id: machineId } = await context.params; // パスから {id} を取得
     const { searchParams } = new URL(request.url);
     const section = searchParams.get('section');
 

@@ -6,8 +6,8 @@ import pool from '@/lib/db';
  * (GET /api/inspections/lots/{lot_id}/shots/4K)
  *
  */
-export async function GET(request, { params }) {
-  const { lot_id } = params; // URLから {lot_id} を取得
+export async function GET(request, context) {
+  const { lot_id } = await context.params; // URLから {lot_id} を取得
   
   try {
     // 1. lot_id (文字列) から 親ロットの内部ID (lot_id_ref) を検索
