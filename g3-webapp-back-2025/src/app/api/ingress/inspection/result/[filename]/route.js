@@ -1,126 +1,149 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
+import pool from '@/lib/db'; // 修正済みのDB接続プール
+import { writeFile, mkdir } from 'fs/promises'; // 画像保存用 (Node.js v14+)
+import path from 'path'; // パス結合用
 
-// 設計書に基づく「検査後」画像の保存ディレクトリ
+// 設計書（セクション7）に基づく「検査後」画像の保存ディレクトリ
 const IMAGE_DIR_AFTER = '/imageDB/afterTest/';
+// サーバーのファイルシステム上の絶対パス (Next.jsの public ディレクトリを想定)
 const SAVE_DIR_AFTER = path.join(process.cwd(), 'public', IMAGE_DIR_AFTER);
-
-// ★復元: 指定ミリ秒待機するヘルパー関数
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * API: 7. 【検査後】結果と画像の送信（filename指定・単発）
  * (PUT /api/ingress/inspection/result/{filename})
+ * ★重複チェック機能付き
  */
 export async function PUT(request, context) {
-  // リトライ中は接続を占有しないため、まだ connect しない
+  const client = await pool.connect(); // トランザクションのために接続を専有
   
   try {
-    // 1. パスパラメータ取得 (Next.js 15対応)
+    // 1. パスパラメータ（{filename}）を取得
     const { filename } = await context.params; 
 
-    // 2. multipart/form-data パース
+    // 2. multipart/form-data をパース
     const formData = await request.formData();
     const metadataJson = formData.get('metadata');
-    const imageFile = formData.get('image');
+    const imageFile = formData.get('image'); // 検査後画像 (任意)
 
-    // 3. バリデーション
+    // 3. バリデーション (metadata は必須)
     if (!metadataJson) {
-      return NextResponse.json({ error: "Bad Request", details: "metadataが必要です。" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Bad Request", details: "リクエストに 'metadata' (JSON) が必要です。" },
+        { status: 400 }
+      );
     }
 
+    // 4. metadata (JSON) をパース
     let metadata;
     try {
       metadata = JSON.parse(metadataJson);
     } catch (e) {
-      return NextResponse.json({ error: "Bad Request", details: "JSONが無効です。" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Bad Request", details: "metadata が有効な JSON ではありません。" },
+        { status: 400 }
+      );
     }
 
+    // 5. metadata の内容を検証 (status は必須)
     const { status, details, captured_at } = metadata;
     if (!status || (status !== 'PASS' && status !== 'FAIL')) {
-      return NextResponse.json({ error: "Bad Request", details: "status ('PASS' or 'FAIL') が必要です。" }, { status: 400 });
-    }
-
-    // --- ★復元: リトライロジック (最大5回トライ) ---
-    let shotId = null;
-    const MAX_RETRIES = 5;
-    const RETRY_DELAY_MS = 500; // 0.5秒待機
-
-    for (let i = 0; i < MAX_RETRIES; i++) {
-      // 検索用の一時クエリ (pool.query は自動で接続管理を行うため安全)
-      const findQuery = `SELECT id FROM inspection_camera_shots WHERE image_path LIKE $1`;
-      const findResult = await pool.query(findQuery, [`%/${filename}`]);
-
-      if (findResult.rows.length > 0) {
-        shotId = findResult.rows[0].id;
-        break; // 見つかったらループを抜ける
-      }
-
-      // 見つからなかった場合、まだリトライ回数が残っていれば待機
-      if (i < MAX_RETRIES - 1) {
-        console.log(`[API 7] データ検索中... (${i + 1}/${MAX_RETRIES}) filename: ${filename}`);
-        await sleep(RETRY_DELAY_MS);
-      }
-    }
-
-    // リトライしても見つからなかった場合
-    if (!shotId) {
       return NextResponse.json(
-        { error: "Not Found", details: "指定された filename に一致する検査前データが見つかりません (タイムアウト)。" },
+        { error: "Bad Request", details: "metadata に 'status' ('PASS' または 'FAIL') が必要です。" },
+        { status: 400 }
+      );
+    }
+
+    await client.query('BEGIN'); // --- トランザクション開始 ---
+
+    // 6. (DB処理 1) filename から、更新対象のショットID (id) を見つける
+    const findQuery = `
+      SELECT id 
+      FROM inspection_camera_shots 
+      WHERE image_path LIKE $1;
+    `;
+    const findParams = [`%/${filename}`]; 
+    
+    const findResult = await client.query(findQuery, findParams);
+
+    // --- ★変更点: 検索結果の件数チェック ---
+
+    if (findResult.rows.length === 0) {
+      // 該当なし (404)
+      await client.query('ROLLBACK');
+      return NextResponse.json(
+        { error: "Not Found", details: "指定された filename に一致する検査前データが見つかりません。" },
         { status: 404 }
       );
     }
-    // -------------------------------------------
 
-    // 4. ここから更新本番 (トランザクション開始)
-    const client = await pool.connect(); 
-    try {
-      await client.query('BEGIN');
-
-      // 画像保存 (任意)
-      if (imageFile) {
-        const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
-        const savePath = path.join(SAVE_DIR_AFTER, filename);
-        
-        await mkdir(SAVE_DIR_AFTER, { recursive: true });
-        await writeFile(savePath, imageBuffer);
-      }
-
-      // DB更新
-      const updateQuery = `
-        UPDATE inspection_camera_shots
-        SET 
-          status = $1, 
-          details = $2,
-          captured_at = COALESCE($3, captured_at) 
-        WHERE 
-          id = $4;
-      `;
-      await client.query(updateQuery, [
-        status,
-        details || null,
-        captured_at || null,
-        shotId
-      ]);
-
-      await client.query('COMMIT');
-
-      return NextResponse.json({
-        message: "検査結果を更新しました (リトライ成功)",
-        filename: filename
-      }, { status: 200 });
-
-    } catch (innerError) {
+    // ★追加: 重複チェック (2件以上ヒットしたらエラー)
+    if (findResult.rows.length > 1) {
       await client.query('ROLLBACK');
-      throw innerError;
-    } finally {
-      client.release();
+      return NextResponse.json(
+        { 
+          error: "Conflict", 
+          details: `ファイル名 '${filename}' に一致するデータが ${findResult.rows.length} 件見つかりました (重複データ)。DBを確認してください。`,
+          code: "MULTIPLE_MATCHES"
+        },
+        { status: 409 } // Conflict エラー
+      );
     }
 
+    // ここまで来れば 1件だけ見つかったということ
+    const shotId = findResult.rows[0].id; 
+
+    // -------------------------------------
+
+    // 7. (任意) 検査後画像ファイルが送信されていれば保存
+    if (imageFile) {
+      const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
+      const savePath = path.join(SAVE_DIR_AFTER, filename);
+      
+      await mkdir(SAVE_DIR_AFTER, { recursive: true });
+      await writeFile(savePath, imageBuffer);
+    }
+
+    // 8. (DB処理 2) 検査結果で inspection_camera_shots を UPDATE
+    const updateQuery = `
+      UPDATE inspection_camera_shots
+      SET 
+        status = $1, 
+        details = $2,
+        captured_at = COALESCE($3, captured_at) 
+      WHERE 
+        id = $4;
+    `;
+    await client.query(updateQuery, [
+      status,       // $1
+      details || null, // $2
+      captured_at || null, // $3
+      shotId        // $4
+    ]);
+
+    await client.query('COMMIT'); // --- トランザクション確定 ---
+
+    // 9. 成功レスポンス (200 OK)
+    return NextResponse.json(
+      {
+        message: "検査結果、更新しときました！🎉",
+        filename: filename
+      },
+      { status: 200 }
+    );
+
   } catch (error) {
-    console.error('API Error (PUT result):', error);
-    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+    if (client) {
+      await client.query('ROLLBACK'); // --- エラー時ロールバック ---
+    }
+    console.error('API Error (PUT ingress/inspection/result/{filename}):', error);
+    
+    return NextResponse.json(
+      { error: 'Internal Server Error', details: error.message },
+      { status: 500 }
+    );
+  } finally {
+    if (client) {
+      client.release(); // 接続をプールに返却
+    }
   }
 }
