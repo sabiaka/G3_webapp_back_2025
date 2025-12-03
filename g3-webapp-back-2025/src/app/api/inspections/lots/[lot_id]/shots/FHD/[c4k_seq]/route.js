@@ -2,43 +2,33 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
- * API: FHDショット一覧（4K_seqで絞り込み）
+ * API: FHDショット一覧（4K_seqで絞り込み） + ★進捗集計 (OK/NG率)
  * (GET /api/inspections/lots/{lot_id}/shots/FHD/{4k_seq})
- *
  */
 export async function GET(request, context) {
-  // URLから {lot_id} と {c4k_seq} を取得
   const { lot_id, c4k_seq } = await context.params; 
   
   try {
-    // 1. lot_id (文字列) から 親ロットの内部ID (lot_id_ref) を検索
+    // 1. lot_id 検索
     const lotResult = await pool.query(
       'SELECT id FROM inspection_lots WHERE lot_id = $1',
       [lot_id]
     );
 
     if (lotResult.rows.length === 0) {
-      return NextResponse.json(
-        { error: "Not Found", details: `指定された lot_id (${lot_id}) が見つかりません。` },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Not Found" }, { status: 404 });
     }
-    const lotIdRef = lotResult.rows[0].id; // 内部ID (e.g., 88)
+    const lotIdRef = lotResult.rows[0].id;
 
     // 2. FHDショット一覧を取得
-    // (c4k_seq が一致し、fhd_seq を持つものを検索)
-    // --- ▼ 変更点: SELECTリストを設計書 に合わせる ▼ ---
     const shotsQuery = `
       SELECT
-        -- id, -- (削除)
         camera_id,
-        -- c4k_seq, -- (削除: ルートレベルで返すため)
         fhd_seq,
         shot_seq,
         status,
         details,
         image_path
-        -- captured_at -- (削除)
       FROM
         inspection_camera_shots
       WHERE
@@ -46,17 +36,43 @@ export async function GET(request, context) {
         AND c4k_seq = $2
         AND fhd_seq IS NOT NULL
       ORDER BY
-        id ASC; -- (古い順 / 撮影順)
+        id ASC;
     `;
-    // --- ▲ 変更点 ▲ ---
     
     const shotsResult = await pool.query(shotsQuery, [lotIdRef, c4k_seq]);
+    const shots = shotsResult.rows;
 
-    // 3. 成功レスポンス (設計書 通り)
+    // --- ★追加: 集計ロジック (Summary) ---
+    const total = shots.length;
+    let okCount = 0;
+    let ngCount = 0;
+
+    shots.forEach(shot => {
+      if (shot.status === 'PASS') {
+        okCount++;
+      } else {
+        // FAIL または MISSING は NG としてカウント
+        ngCount++;
+      }
+    });
+
+    // 比率計算 (0除算回避, 小数点第1位まで)
+    const okRate = total > 0 ? Math.round((okCount / total) * 1000) / 10 : 0;
+    const ngRate = total > 0 ? Math.round((ngCount / total) * 1000) / 10 : 0;
+    // ------------------------------------
+
+    // 3. 成功レスポンス
     return NextResponse.json({
       lot_id: lot_id,
-      "4k_seq": c4k_seq, // レスポンスJSON に合わせる
-      shots: shotsResult.rows // "shots" 配列
+      "4k_seq": c4k_seq,
+      summary: { // ★追加
+        total: total,
+        ok_count: okCount,
+        ng_count: ngCount,
+        ok_rate: okRate,
+        ng_rate: ngRate
+      },
+      shots: shots
     });
 
   } catch (error) {
