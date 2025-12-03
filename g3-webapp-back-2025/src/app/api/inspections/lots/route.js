@@ -65,13 +65,13 @@ export async function GET(request) {
       const lotShots = allShots.filter(s => s.lot_id_ref === lot.id);
 
       let representativeImage = null;
-      
+
       // ★変更点: 初期値は親テーブルの時刻にしておくが、代表画像が見つかれば上書きする
-      let displayCapturedAt = lot.captured_at; 
+      let displayCapturedAt = lot.captured_at;
 
       if (lotShots.length > 0) {
         const firstShot = lotShots[0];
-        
+
         // ★変更点: 代表画像の時刻を採用する
         if (firstShot.captured_at) {
           displayCapturedAt = firstShot.captured_at;
@@ -93,15 +93,23 @@ export async function GET(request) {
         lotShots.forEach(shot => {
           const k4 = shot.c4k_seq;
           if (!k4) return;
-          const currentStatus = seqMap.get(k4) || 'PASS';
+          const currentStatus = seqMap.get(k4);
 
           if (shot.status === 'FAIL') {
-             seqMap.set(k4, 'FAIL');
-             pass = false;
-          } else if (shot.status === 'MISSING' && currentStatus !== 'FAIL') {
-             seqMap.set(k4, currentStatus); 
-          } else {
-             seqMap.set(k4, currentStatus);
+            seqMap.set(k4, 'FAIL');
+            pass = false;
+            return;
+          }
+
+          if (shot.status === 'MISSING') {
+            if (currentStatus !== 'FAIL') {
+              seqMap.set(k4, 'MISSING');
+            }
+            return;
+          }
+
+          if (!currentStatus) {
+            seqMap.set(k4, 'PASS');
           }
         });
         details.four_k_sequences = Array.from(seqMap.entries()).map(([k, v]) => ({
@@ -112,12 +120,23 @@ export async function GET(request) {
         const camMap = new Map();
         lotShots.forEach(shot => {
           const cam = shot.camera_id;
-          const currentStatus = camMap.get(cam) || 'PASS';
+          const currentStatus = camMap.get(cam);
+
           if (shot.status === 'FAIL') {
             camMap.set(cam, 'FAIL');
             pass = false;
-          } else {
-            camMap.set(cam, currentStatus);
+            return;
+          }
+
+          if (shot.status === 'MISSING') {
+            if (currentStatus !== 'FAIL') {
+              camMap.set(cam, 'MISSING');
+            }
+            return;
+          }
+
+          if (!currentStatus) {
+            camMap.set(cam, 'PASS');
           }
         });
         details.cameras = Array.from(camMap.entries()).map(([k, v]) => ({
