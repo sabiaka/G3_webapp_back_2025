@@ -46,7 +46,6 @@ export async function POST(request, { params }) {
     let metadata;
     let metadataText;
     try {
-      // FormData から取得した値が Blob/File の可能性もあるため、文字列化を安全に行う
       metadataText = typeof metadataJson === 'string'
         ? metadataJson
         : (metadataJson && typeof metadataJson.text === 'function'
@@ -54,66 +53,24 @@ export async function POST(request, { params }) {
             : String(metadataJson));
       metadata = JSON.parse(metadataText);
     } catch (e) {
-      // 可能な範囲で、エラー位置や周辺スニペットなどの詳細を返す
+      // JSONパースエラー時の詳細処理
       const errMsg = (e && e.message) ? e.message : 'JSON パースエラー';
-      let position;
-      let line;
-      let column;
-      let snippet;
-
-      try {
-        // Node の JSON.parse エラーは "in JSON at position <n>" を含むことが多い
-        const match = /position\s+(\d+)/i.exec(errMsg);
-        const index = match ? Number(match[1]) : undefined;
-        const text = metadataText ?? (typeof metadataJson === 'string' ? metadataJson : '');
-
-        if (Number.isFinite(index) && typeof text === 'string' && text.length > 0) {
-          // 行・列を計算（1始まり）
-          let l = 1, c = 1;
-          for (let i = 0; i < index && i < text.length; i++) {
-            if (text[i] === '\n') { l++; c = 1; } else { c++; }
-          }
-          position = index;
-          line = l;
-          column = c;
-
-          // エラー周辺の短いスニペット（最大 ~80 文字 + ポインタ）
-          const CONTEXT = 40;
-          const start = Math.max(0, index - CONTEXT);
-          const end = Math.min(text.length, index + CONTEXT);
-          const prefix = start > 0 ? '…' : '';
-          const suffix = end < text.length ? '…' : '';
-          const segment = text.slice(start, end);
-          const pointer = ' '.repeat(Math.max(0, index - start)) + '^';
-          snippet = `${prefix}${segment}${suffix}\n${pointer}`;
-        }
-      } catch (_) {
-        // 解析に失敗した場合は詳細なしで返す
-      }
-
       return NextResponse.json(
         {
           error: "Bad Request",
           details: "metadata が有効な JSON ではありません。",
-          parse_error: {
-            message: errMsg,
-            position,
-            line,
-            column,
-            snippet,
-          },
+          parse_error: { message: errMsg },
         },
         { status: 400 }
       );
     }
 
-    // 5. metadata の内容を検証 (API 6 の仕様)
+    // 5. metadata の内容を検証
     if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
       return NextResponse.json(
         {
           error: "Bad Request",
           details: "metadata はオブジェクト形式で指定してください。",
-          received_type: Array.isArray(metadata) ? 'array' : typeof metadata,
         },
         { status: 400 }
       );
@@ -127,10 +84,7 @@ export async function POST(request, { params }) {
     ];
 
     const missingMetadataFields = metadataRequirements
-      .filter(({ field }) => {
-        const value = metadata[field];
-        return value === undefined || value === null || value === '';
-      })
+      .filter(({ field }) => !metadata[field])
       .map(({ label }) => label);
 
     if (missingMetadataFields.length > 0) {
@@ -139,13 +93,12 @@ export async function POST(request, { params }) {
           error: "Bad Request",
           details: "metadata の必須項目が不足しています。",
           missing_fields: missingMetadataFields,
-          received_metadata_keys: Object.keys(metadata),
         },
         { status: 400 }
       );
     }
 
-    //    設計書の '4K_seq' キーを 'c4k_seq' (DBカラム名) にマッピング
+    // パラメータ取得
     const { camera_id, '4K_seq': c4k_seq, 'FHD_seq': fhd_seq, captured_at, section_code } = metadata;
 
     // 6. DBに接続
@@ -165,12 +118,51 @@ export async function POST(request, { params }) {
     }
     const lotIdRef = lotResult.rows[0].id; 
 
-    // 8. ファイル名を生成 (設計書セクション6のルール)
+
+    // ============================================================
+    // ★追加: 重複チェック (詳細警告文付き)
+    // ============================================================
+    // 既に同じ shot (camera_id, c4k_seq, fhd_seq) が登録されていないか確認する
+    const duplicateCheckQuery = `
+      SELECT id FROM inspection_camera_shots 
+      WHERE lot_id_ref = $1 
+        AND camera_id = $2 
+        AND c4k_seq = $3 
+        AND fhd_seq = $4
+      LIMIT 1;
+    `;
+    const duplicateResult = await client.query(duplicateCheckQuery, [
+      lotIdRef, camera_id, c4k_seq, fhd_seq
+    ]);
+
+    if (duplicateResult.rows.length > 0) {
+      // 重複が見つかった場合、具体的な値を埋め込んだメッセージを作成
+      const errorMessage = `重複エラー: カメラID '${camera_id}', 4K連番 '${c4k_seq}', FHD連番 '${fhd_seq}' のデータは既に登録されています。`;
+
+      return NextResponse.json(
+        { 
+          error: "Conflict", 
+          details: errorMessage,
+          code: "DUPLICATE_ENTRY",
+          conflicting_params: {
+            lot_id: lotId,
+            camera_id: camera_id,
+            c4k_seq: c4k_seq,
+            fhd_seq: fhd_seq
+          }
+        },
+        { status: 409 }
+      );
+    }
+    // ============================================================
+
+
+    // 8. ファイル名を生成
     const filename = `${lotId}_${camera_id}_${c4k_seq}_${fhd_seq}.png`;
     
     // 9. 画像ファイルをサーバーに保存
     const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
-    const savePath = path.join(SAVE_DIR_BEFORE, filename); // 検査前フォルダに保存
+    const savePath = path.join(SAVE_DIR_BEFORE, filename); 
     
     await mkdir(SAVE_DIR_BEFORE, { recursive: true });
     await writeFile(savePath, imageBuffer);
@@ -199,7 +191,6 @@ export async function POST(request, { params }) {
 
   } catch (error) {
     console.error('API Error (POST ingress/inspection/{lot_id}):', error);
-    
     return NextResponse.json(
       { error: 'Internal Server Error', details: error.message },
       { status: 500 }
@@ -217,7 +208,6 @@ export async function POST(request, { params }) {
 /**
  * API: 13. 特定ロットの削除 (DB + 画像ファイル)
  * (DELETE /api/ingress/inspection/{lot_id})
- *
  */
 export async function DELETE(request, { params }) {
   const client = await pool.connect(); // トランザクションのために接続を専有
@@ -289,16 +279,14 @@ export async function DELETE(request, { params }) {
     );
 
   } catch (error) {
-    // 予期せぬDBエラーやファイルパス生成エラーなどが発生した場合
     await client.query('ROLLBACK'); 
 
-    // 予期せぬエラーは 500 を返す
     console.error(`API Fatal Error (DELETE lot ${lotId}):`, error);
     return NextResponse.json(
       { error: 'Internal Server Error', details: 'ファイル削除処理中に予期せぬエラーが発生しました。' },
       { status: 500 }
     );
   } finally {
-    client.release(); // 接続をプールに返却
+    client.release(); 
   }
 }
