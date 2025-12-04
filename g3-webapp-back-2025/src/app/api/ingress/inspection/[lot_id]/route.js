@@ -17,10 +17,7 @@ export async function POST(request, context) {
 
   try {
     // Next.js 15: context.params を await する！
-    const params = await context.params;
-
-    // 1. パスパラメータ（{lot_id}）を取得
-    const lotId = params.lot_id; // これで "MAT-00125" とか取れるよ！🙆‍♀️
+    const { lot_id: lotId } = await context.params;
 
     // 2. multipart/form-data をパース
     const formData = await request.formData();
