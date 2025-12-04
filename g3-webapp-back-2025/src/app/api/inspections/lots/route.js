@@ -105,7 +105,7 @@ export async function GET(request) {
           }
         });
         details.four_k_sequences = Array.from(seqMap.entries()).map(([k, v]) => ({
-          "4k_seq": k, "status": v
+          "c4k_seq": k, "status": v
         }));
       } else {
         // spring (カメラ単位)
