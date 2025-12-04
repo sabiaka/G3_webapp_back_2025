@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
- * API: FHDショット一覧（4K_seqで絞り込み） + ★進捗集計 (OK/NG率)
- * (GET /api/inspections/lots/{lot_id}/shots/FHD/{4k_seq})
+ * API: FHDショット一覧 + ★進捗集計 (OK/NG率)
+ * (GET /api/inspections/lots/{lot_id}/shots/FHD/{c4k_seq})
+ * ★JSONキーを "c4k_seq" に変更
  */
 export async function GET(request, context) {
   const { lot_id, c4k_seq } = await context.params; 
@@ -64,8 +65,8 @@ export async function GET(request, context) {
     // 3. 成功レスポンス
     return NextResponse.json({
       lot_id: lot_id,
-      "4k_seq": c4k_seq,
-      summary: { // ★追加
+      "c4k_seq": c4k_seq, // ★変更: キー名を "c4k_seq" に修正
+      summary: {
         total: total,
         ok_count: okCount,
         ng_count: ngCount,
