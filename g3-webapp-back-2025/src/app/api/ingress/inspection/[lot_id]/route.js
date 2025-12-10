@@ -8,6 +8,7 @@ import {
   removeImage,
   toAfterImageUrl,
 } from '@/lib/image-storage';
+import { emitEvent } from '@/lib/event-bus';
 
 // ------------------------------------------------------------
 // 1. POST 関数 (API 6: 【検査前】画像アップロード)
@@ -177,6 +178,12 @@ export async function POST(request, { params }) {
     ]);
 
     // 11. 成功レスポンス (201 Created)
+    emitEvent({
+      type: 'inspection:imageUploaded',
+      lotId,
+      filename,
+    });
+
     return NextResponse.json(
       {
         message: "検査前画像を登録しました",
@@ -278,6 +285,12 @@ export async function DELETE(request, { params }) {
 
     // 6. トランザクション確定
     await client.query('COMMIT'); 
+
+    emitEvent({
+      type: 'inspection:lotDeleted',
+      lotId,
+      deletedFiles: deleteCount,
+    });
 
     // 7. 成功レスポンス
     return NextResponse.json(

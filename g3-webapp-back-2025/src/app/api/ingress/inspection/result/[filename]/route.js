@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // 修正済みのDB接続プール
 import { writeFile } from 'fs/promises'; // 画像保存用
 import { buildAfterImageUrl, prepareImageTarget } from '@/lib/image-storage';
+import { emitEvent } from '@/lib/event-bus';
 
 /**
  * API: 7. 【検査後】結果と画像の送信（filename指定・単発）
@@ -115,6 +116,12 @@ export async function PUT(request, context) {
     ]);
 
     await client.query('COMMIT'); // --- トランザクション確定 ---
+
+    emitEvent({
+      type: 'inspection:resultUpdated',
+      filename,
+      status,
+    });
 
     // 9. 成功レスポンス (200 OK)
     return NextResponse.json(

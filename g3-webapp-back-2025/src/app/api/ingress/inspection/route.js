@@ -3,6 +3,7 @@ import { writeFile } from 'fs/promises';
 import path from 'path';
 import db from '@/lib/db'; // DB接続
 import { buildBeforeImageUrl, prepareImageTarget } from '@/lib/image-storage';
+import { emitEvent } from '@/lib/event-bus';
 
 // (generateNewLotId 関数は変更なし)
 async function generateNewLotId(prefix) {
@@ -120,6 +121,13 @@ export async function POST(request) {
     }
 
     await db.query('COMMIT');
+
+    emitEvent({
+      type: 'inspection:lotCreated',
+      lotId: newLotId,
+      sectionCode: section_code,
+      filenames: createdFilenames,
+    });
 
     // --- 7. 成功レスポンス ---
     return NextResponse.json(

@@ -6,6 +6,7 @@ import {
   buildBeforeImageUrl,
   prepareImageTarget,
 } from '@/lib/image-storage';
+import { emitEvent } from '@/lib/event-bus';
 
 /**
  * API: 10. 検査結果一括登録(ばねどめ検査用)
@@ -122,6 +123,13 @@ export async function POST(request, context) {
     ]);
 
     await client.query('COMMIT'); // --- トランザクション確定 ---
+
+    emitEvent({
+      type: 'inspection:batchUploaded',
+      lotId: lotIdFromPath,
+      filename,
+      status,
+    });
 
     // 11. 成功レスポンス (201 Created)
     return NextResponse.json(

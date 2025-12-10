@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeAfterImagePath, removeImage } from '@/lib/image-storage';
+import { emitEvent } from '@/lib/event-bus';
 
 /**
  * API: 12. 検査ステータスのリセット (再検査の初期化)
@@ -85,6 +86,12 @@ export async function POST(request, { params }) {
 
     // 6. トランザクション確定
     await client.query('COMMIT');
+
+    emitEvent({
+      type: 'inspection:lotReset',
+      lotId,
+      updatedCount,
+    });
 
     // 7. 成功レスポンス
     return NextResponse.json(
