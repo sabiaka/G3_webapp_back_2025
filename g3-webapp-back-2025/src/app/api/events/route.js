@@ -25,6 +25,11 @@ export async function GET() {
       }, 25000);
 
       controller.enqueue(encoder.encode('retry: 5000\n\n'));
+
+      sendEvent({
+        type: 'sse:connected',
+        connectedAt: new Date().toISOString(),
+      });
     },
     cancel() {
       if (closed) {
