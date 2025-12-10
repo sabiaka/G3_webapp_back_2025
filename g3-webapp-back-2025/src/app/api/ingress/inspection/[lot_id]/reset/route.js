@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { unlink, access } from 'fs/promises'; // ファイル削除用 (fs.promises API)
-import path from 'path'; // パス結合用
-
-// サーバーのファイルシステム上の絶対パスのベース (public ディレクトリを想定)
-const BASE_DIR = path.join(process.cwd(), 'public');
-// 検査後画像のディレクトリ名
-const AFTER_TEST_DIR_NAME = 'afterTest';
+import { normalizeAfterImagePath, removeImage } from '@/lib/image-storage';
 
 /**
  * API: 12. 検査ステータスのリセット (再検査の初期化)
@@ -61,24 +55,31 @@ export async function POST(request, { params }) {
 
     // 5. 物理ファイル削除 (検査後画像のみ)
     for (const dbPath of pathsToReset) {
-      // 検査後画像パスを構築 ('beforeTest' を 'afterTest' に置換)
-      const filename = path.basename(dbPath);
-      const afterPath = path.join(BASE_DIR, 'imageDB', AFTER_TEST_DIR_NAME, filename);
+      let afterImageUrl;
+      try {
+        afterImageUrl = normalizeAfterImagePath(dbPath);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        console.error(`[RESET] Invalid image path (${dbPath}):`, error);
+        return NextResponse.json(
+          { error: 'Internal Server Error', details: '画像パスの解析に失敗しました。' },
+          { status: 500 }
+        );
+      }
+
+      if (!afterImageUrl) {
+        continue;
+      }
 
       try {
-        await unlink(afterPath); // 検査後画像を削除
-      } catch (e) {
-        if (e.code === 'ENOENT') {
-          // ファイルがない場合 (ENOENT) は正常続行
-        } else {
-          // その他のファイルエラーはトランザクションを停止し、500を返す
-          await client.query('ROLLBACK');
-          console.error(`[DELETE] Error deleting AFTER image (${afterPath}):`, e);
-          return NextResponse.json(
-            { error: "Internal Server Error", details: `ファイル削除中にエラーが発生しました。詳細: ${e.message}` },
-            { status: 500 }
-          );
-        }
+        await removeImage(afterImageUrl);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        console.error(`[DELETE] Error deleting AFTER image (${afterImageUrl}):`, error);
+        return NextResponse.json(
+          { error: 'Internal Server Error', details: `ファイル削除中にエラーが発生しました。詳細: ${error.message}` },
+          { status: 500 }
+        );
       }
     }
 

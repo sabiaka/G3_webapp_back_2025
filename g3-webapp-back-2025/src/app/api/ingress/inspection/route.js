@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
+import { writeFile } from 'fs/promises';
 import path from 'path';
 import db from '@/lib/db'; // DB接続
+import { buildBeforeImageUrl, prepareImageTarget } from '@/lib/image-storage';
 
 // (generateNewLotId 関数は変更なし)
 async function generateNewLotId(prefix) {
@@ -71,10 +72,6 @@ export async function POST(request) {
     const lotResult = await db.query(insertLotQuery, [newLotId, section_code, lotCapturedAt]);
     const lotDbId = lotResult.rows[0].id; // 共通のロットID
 
-    // --- 5. 物理フォルダの準備 ---
-    const uploadDir = path.join(process.cwd(), 'public', 'ImageDB', 'beforeTest');
-    await fs.mkdir(uploadDir, { recursive: true });
-
     const createdFilenames = []; // 成功レスポンス用にファイル名を格納
 
     // --- 6. shots 配列をループして画像とDB登録 ---
@@ -101,7 +98,9 @@ export async function POST(request) {
 
         // 6-2. 物理ファイル保存
         const buffer = Buffer.from(await imageFile.arrayBuffer());
-        await fs.writeFile(path.join(uploadDir, newFilename), buffer);
+        const imageUrl = buildBeforeImageUrl(newFilename);
+        const targetPath = await prepareImageTarget(imageUrl);
+        await writeFile(targetPath, buffer);
         
         createdFilenames.push(newFilename);
       } else {

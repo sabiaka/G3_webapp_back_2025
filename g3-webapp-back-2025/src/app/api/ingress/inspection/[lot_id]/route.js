@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // 修正済みのDB接続プール
-import { writeFile, mkdir, unlink } from 'fs/promises'; // 画像保存・削除用
-import path from 'path'; // パス結合用
-
-// --- 定数 ---
-// API 6 (POST) の保存先フォルダ
-const IMAGE_DIR_BEFORE = '/imageDB/beforeTest/'; 
-const SAVE_DIR_BEFORE = path.join(process.cwd(), 'public', IMAGE_DIR_BEFORE);
-// API 13 (DELETE) で使用するフォルダ
-const BASE_DIR = path.join(process.cwd(), 'public'); 
+import { writeFile } from 'fs/promises'; // 画像保存用
+import {
+  buildBeforeImageUrl,
+  normalizeBeforeImagePath,
+  prepareImageTarget,
+  removeImage,
+  toAfterImageUrl,
+} from '@/lib/image-storage';
 
 // ------------------------------------------------------------
 // 1. POST 関数 (API 6: 【検査前】画像アップロード)
@@ -159,16 +158,14 @@ export async function POST(request, { params }) {
 
     // 8. ファイル名を生成
     const filename = `${lotId}_${camera_id}_${c4k_seq}_${fhd_seq}.png`;
+    const imageDbPath = buildBeforeImageUrl(filename);
     
     // 9. 画像ファイルをサーバーに保存
     const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
-    const savePath = path.join(SAVE_DIR_BEFORE, filename); 
-    
-    await mkdir(SAVE_DIR_BEFORE, { recursive: true });
+    const savePath = await prepareImageTarget(imageDbPath);
     await writeFile(savePath, imageBuffer);
 
     // 10. (DB処理 2) inspection_camera_shots にデータを INSERT
-    const imageDbPath = path.join(IMAGE_DIR_BEFORE, filename).replace(/\\/g, '/');
     const insertQuery = `
       INSERT INTO inspection_camera_shots (
         lot_id_ref, camera_id, c4k_seq, fhd_seq, status, image_path, captured_at
@@ -243,24 +240,34 @@ export async function DELETE(request, { params }) {
     let deleteCount = 0;
     
     for (const dbPath of imagePaths) {
-      // a. 検査前画像パスを構築
-      const beforePath = path.join(BASE_DIR, dbPath);
-      // b. 検査後画像パスを構築 (beforeTest -> afterTest に置換)
-      const afterPath = path.join(BASE_DIR, dbPath.replace('beforeTest', 'afterTest'));
-
-      // ★ ファイルが存在しなくても API は成功させる ★
+      let beforeImageUrl;
       try {
-        await unlink(beforePath); // 検査前画像を削除
-        deleteCount++;
-      } catch (e) {
-        if (e.code !== 'ENOENT') { console.error(`[DELETE] Error deleting BEFORE image (${beforePath}):`, e); }
+        beforeImageUrl = normalizeBeforeImagePath(dbPath);
+      } catch (error) {
+        console.error(`[DELETE] Invalid image path (${dbPath}):`, error);
+        continue;
       }
-      
+
+      if (!beforeImageUrl) {
+        continue;
+      }
+
       try {
-        await unlink(afterPath); // 検査後画像を削除
-        deleteCount++;
-      } catch (e) {
-        if (e.code !== 'ENOENT') { console.error(`[DELETE] Error deleting AFTER image (${afterPath}):`, e); }
+        if (await removeImage(beforeImageUrl)) {
+          deleteCount++;
+        }
+      } catch (error) {
+        console.error(`[DELETE] Error deleting BEFORE image (${beforeImageUrl}):`, error);
+      }
+
+      const afterImageUrl = toAfterImageUrl(beforeImageUrl);
+
+      try {
+        if (await removeImage(afterImageUrl)) {
+          deleteCount++;
+        }
+      } catch (error) {
+        console.error(`[DELETE] Error deleting AFTER image (${afterImageUrl}):`, error);
       }
     }
 
