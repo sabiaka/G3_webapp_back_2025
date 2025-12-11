@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // データベース接続プール
+import { emitEvent } from '@/lib/event-bus';
 
 const INITIAL_LOT_SEQUENCE = '00001';
 
@@ -124,6 +125,14 @@ export async function POST(request, context) {
     await client.query(createNewLotQuery, [newLotId, section]);
 
     await client.query('COMMIT'); // --- トランザクション確定 ---
+
+    emitEvent({
+      type: 'production:lotIncremented',
+      machineId,
+      lotId: newLotId,
+      section,
+      todayProductionCount: newProductionCount,
+    });
 
     // 7. 成功レスポンス
     return NextResponse.json({

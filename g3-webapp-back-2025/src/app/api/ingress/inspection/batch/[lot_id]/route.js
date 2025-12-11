@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // 修正済みのDB接続プール
-import { writeFile, mkdir } from 'fs/promises'; // 画像保存用 (Node.js v14+)
-import path from 'path'; // パス結合用
-
-// 設計書（セクション6, 7）に基づく画像保存ディレクトリ
-const IMAGE_DIR_BEFORE = '/imageDB/beforeTest/';
-const IMAGE_DIR_AFTER = '/imageDB/afterTest/';
-const SAVE_DIR_BEFORE = path.join(process.cwd(), 'public', IMAGE_DIR_BEFORE);
-const SAVE_DIR_AFTER = path.join(process.cwd(), 'public', IMAGE_DIR_AFTER);
+import { writeFile } from 'fs/promises'; // 画像保存用
+import {
+  buildAfterImageUrl,
+  buildBeforeImageUrl,
+  prepareImageTarget,
+} from '@/lib/image-storage';
+import { emitEvent } from '@/lib/event-bus';
 
 /**
  * API: 10. 検査結果一括登録(ばねどめ検査用)
@@ -89,19 +88,19 @@ export async function POST(request, context) {
     
     // 8. 画像ファイル(Before)をサーバーに保存
     const beforeBuffer = Buffer.from(await beforeImageFile.arrayBuffer());
-    const beforeSavePath = path.join(SAVE_DIR_BEFORE, filename);
-    await mkdir(SAVE_DIR_BEFORE, { recursive: true });
+    const beforeImageUrl = buildBeforeImageUrl(filename);
+    const beforeSavePath = await prepareImageTarget(beforeImageUrl);
     await writeFile(beforeSavePath, beforeBuffer);
 
     // 9. 画像ファイル(After)をサーバーに保存
     const afterBuffer = Buffer.from(await afterImageFile.arrayBuffer());
-    const afterSavePath = path.join(SAVE_DIR_AFTER, filename);
-    await mkdir(SAVE_DIR_AFTER, { recursive: true });
+    const afterImageUrl = buildAfterImageUrl(filename);
+    const afterSavePath = await prepareImageTarget(afterImageUrl);
     await writeFile(afterSavePath, afterBuffer);
 
     // 10. (DB処理 2) inspection_camera_shots にデータを INSERT
     // (API 10 は API 6/7 と違い、1回で結果(status)まで登録する)
-    const imageDbPath = path.join(IMAGE_DIR_BEFORE, filename).replace(/\\/g, '/'); // DBには 'beforeTest' のパスを保存
+    const imageDbPath = beforeImageUrl; // DBには 'beforeTest' のパスを保存
     const insertQuery = `
       INSERT INTO inspection_camera_shots (
         lot_id_ref, 
@@ -124,6 +123,13 @@ export async function POST(request, context) {
     ]);
 
     await client.query('COMMIT'); // --- トランザクション確定 ---
+
+    emitEvent({
+      type: 'inspection:batchUploaded',
+      lotId: lotIdFromPath,
+      filename,
+      status,
+    });
 
     // 11. 成功レスポンス (201 Created)
     return NextResponse.json(
