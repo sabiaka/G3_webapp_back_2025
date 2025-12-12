@@ -117,16 +117,16 @@ export async function PUT(request, context) {
 
     await client.query('COMMIT'); // --- トランザクション確定 ---
 
+    // ★修正: 設計書準拠のSSEイベント通知
     emitEvent({
-      type: 'inspection:resultUpdated',
-      filename,
-      status,
+      ivent: "inspection:resultUpdated",
+      message: "検査結果が更新されました"
     });
 
     // 9. 成功レスポンス (200 OK)
     return NextResponse.json(
       {
-        message: "検査結果、更新しときました！🎉",
+        message: "検査結果、更新しといたよ！🎉", // 設計書に合わせて変更
         filename: filename
       },
       { status: 200 }
