@@ -13,13 +13,8 @@ function getLotPrefix(section) {
 /**
  * lot_idの数値部分をインクリメントして新しいIDを生成する
  * (例: "MAT-00123" -> "MAT-00124")
- * @param {string} currentLotId - 現在のロットID
- * @returns {string} - 新しいロットID
- * @throws {Error} - "MAT-ABC" のような不正な形式の場合
  */
 function getNextLotId(currentLotId) {
-  // 正規表現で "プレフィックス" と "数値部分" に分割
-  // (例: "MAT-00123" -> ["MAT-", "00123"])
   const matches = currentLotId.match(/^([A-Z]+-)(\d+)$/);
 
   if (!matches || matches.length < 3) {
@@ -28,15 +23,14 @@ function getNextLotId(currentLotId) {
 
   const prefix = matches[1];      // "MAT-"
   const numberPart = matches[2];  // "00123"
-  const numberLength = numberPart.length; // 5
+  const numberLength = numberPart.length;
 
-  const currentNumber = parseInt(numberPart, 10); // 123
-  const nextNumber = currentNumber + 1;           // 124
+  const currentNumber = parseInt(numberPart, 10);
+  const nextNumber = currentNumber + 1;
 
-  // padStartで桁数を維持 (例: 124 -> "00124")
   const newNumberPart = String(nextNumber).padStart(numberLength, '0');
 
-  return prefix + newNumberPart; // "MAT-00124"
+  return prefix + newNumberPart;
 }
 
 /**
@@ -48,7 +42,7 @@ export async function POST(request, context) {
   
   try {
     // 1. パスパラメータとクエリパラメータを取得
-    const { id: machineId } = await context.params; // パスから {id} を取得
+    const { id: machineId } = await context.params;
     const { searchParams } = new URL(request.url);
     const section = searchParams.get('section');
 
@@ -68,9 +62,7 @@ export async function POST(request, context) {
 
     await client.query('BEGIN'); // --- トランザクション開始 ---
 
-    // --- ▼ 変更点 ▼ ---
     // 3. (処理A) machine_status の "最新の行" の today_production_count を +1 する
-    //    (machine_id = $1 の中で、machine_status_id が最大の行のみを対象)
     const updateCountQuery = `
       UPDATE machine_status
       SET today_production_count = today_production_count + 1
@@ -82,12 +74,10 @@ export async function POST(request, context) {
         )
       RETURNING today_production_count;
     `;
-    // --- ▲ 変更点 ▲ ---
 
     const updateResult = await client.query(updateCountQuery, [machineId]);
 
     if (updateResult.rows.length === 0) {
-      // 該当する machine_id が存在しなかった (もしくはサブクエリで見つからなかった)
       await client.query('ROLLBACK');
       return NextResponse.json(
         { error: "Machine not found" },
@@ -110,11 +100,10 @@ export async function POST(request, context) {
     let newLotId;
 
     if (currentLotResult.rows.length === 0) {
-      // 既存ロットが無ければ 00001 から開始
       newLotId = `${lotPrefix}${INITIAL_LOT_SEQUENCE}`;
     } else {
-      const currentLotId = currentLotResult.rows[0].lot_id; // (例: "MAT-00123")
-      newLotId = getNextLotId(currentLotId); // (例: "MAT-00124")
+      const currentLotId = currentLotResult.rows[0].lot_id;
+      newLotId = getNextLotId(currentLotId);
     }
 
     // 6. (処理D) 新しい lot_id で inspection_lots に "新行" を作成
@@ -126,24 +115,21 @@ export async function POST(request, context) {
 
     await client.query('COMMIT'); // --- トランザクション確定 ---
 
+    // ★修正: 設計書準拠のSSEイベント通知
     emitEvent({
-      type: 'production:lotIncremented',
-      machineId,
-      lotId: newLotId,
-      section,
-      todayProductionCount: newProductionCount,
+      ivent: "production:lotIncremented",
+      message: "生産数がインクリメントされました"
     });
 
     // 7. 成功レスポンス
     return NextResponse.json({
       today_production_count: newProductionCount,
-      lot_id: newLotId // +1 された新しいIDを返す
+      lot_id: newLotId
     });
 
   } catch (error) {
     await client.query('ROLLBACK'); // --- エラー時ロールバック ---
     
-    // lot_id の形式が "MAT-ABC" などで getNextLotId が失敗した場合
     if (error.message.includes('不正なロットID形式')) {
       return NextResponse.json(
         { error: "Internal Server Error", details: `DB内のロットID形式が不正です: ${error.message}` },
@@ -151,13 +137,12 @@ export async function POST(request, context) {
       );
     }
     
-    // その他のDBエラー
     console.error('API Error (increment-production):', error);
     return NextResponse.json(
       { error: 'Internal Server Error', details: error.message },
       { status: 500 }
     );
   } finally {
-    client.release(); // 接続をプールに返却
+    client.release();
   }
 }

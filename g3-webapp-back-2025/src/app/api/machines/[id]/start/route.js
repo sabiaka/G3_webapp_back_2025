@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import { emitEvent } from "@/lib/event-bus"; // ★追加: Event Bus
 
-// 機械の稼働開始 API（既存があれば更新、なければ作成）
+// 機械の稼働開始 API
 // POST /api/machines/{id}/start
 export async function POST(request, ctx) {
 	const { id } = await ctx.params; // Next.js 15: params は非同期
@@ -76,6 +77,12 @@ export async function POST(request, ctx) {
 			return /[+-]\d{2}:\d{2}$/.test(s) ? s : `${s}+09:00`;
 		};
 
+		// ★追加: SSEイベント通知 (設計書セクション4)
+		emitEvent({
+			ivent: "machine:started",
+			message: "機械の稼働が開始されました"
+		});
+
 		return NextResponse.json({
 			started_at: toJstIso(startedAt),
 		});
@@ -84,4 +91,3 @@ export async function POST(request, ctx) {
 		return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
 	}
 }
-

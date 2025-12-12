@@ -6,7 +6,6 @@ import { emitEvent } from '@/lib/event-bus';
 /**
  * API: 12. 検査ステータスのリセット (再検査の初期化)
  * (POST /api/ingress/inspection/{lot_id}/reset)
- *
  */
 export async function POST(request, { params }) {
   const client = await pool.connect();
@@ -87,10 +86,10 @@ export async function POST(request, { params }) {
     // 6. トランザクション確定
     await client.query('COMMIT');
 
+    // ★修正: 設計書準拠のSSEイベント通知
     emitEvent({
-      type: 'inspection:lotReset',
-      lotId,
-      updatedCount,
+      ivent: "inspection:lotReset",
+      message: "検査ロットがリセットされました"
     });
 
     // 7. 成功レスポンス

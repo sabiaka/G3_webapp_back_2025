@@ -124,11 +124,10 @@ export async function POST(request, context) {
 
     await client.query('COMMIT'); // --- トランザクション確定 ---
 
+    // ★修正: 設計書準拠のSSEイベント通知
     emitEvent({
-      type: 'inspection:batchUploaded',
-      lotId: lotIdFromPath,
-      filename,
-      status,
+      ivent: "inspection:batchUploaded",
+      message: "検査結果が一括で登録されました"
     });
 
     // 11. 成功レスポンス (201 Created)

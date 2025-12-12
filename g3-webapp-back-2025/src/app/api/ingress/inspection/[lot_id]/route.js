@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db'; // 修正済みのDB接続プール
-import { writeFile } from 'fs/promises'; // 画像保存用
+import pool from '@/lib/db';
+import { writeFile } from 'fs/promises';
 import {
   buildBeforeImageUrl,
   normalizeBeforeImagePath,
@@ -53,7 +53,6 @@ export async function POST(request, { params }) {
             : String(metadataJson));
       metadata = JSON.parse(metadataText);
     } catch (e) {
-      // JSONパースエラー時の詳細処理
       const errMsg = (e && e.message) ? e.message : 'JSON パースエラー';
       return NextResponse.json(
         {
@@ -98,7 +97,6 @@ export async function POST(request, { params }) {
       );
     }
 
-    // パラメータ取得
     const { camera_id, '4K_seq': c4k_seq, 'FHD_seq': fhd_seq, captured_at, section_code } = metadata;
 
     // 6. DBに接続
@@ -120,9 +118,8 @@ export async function POST(request, { params }) {
 
 
     // ============================================================
-    // ★追加: 重複チェック (詳細警告文付き)
+    // 重複チェック
     // ============================================================
-    // 既に同じ shot (camera_id, c4k_seq, fhd_seq) が登録されていないか確認する
     const duplicateCheckQuery = `
       SELECT id FROM inspection_camera_shots 
       WHERE lot_id_ref = $1 
@@ -136,7 +133,6 @@ export async function POST(request, { params }) {
     ]);
 
     if (duplicateResult.rows.length > 0) {
-      // 重複が見つかった場合、具体的な値を埋め込んだメッセージを作成
       const errorMessage = `重複エラー: カメラID '${camera_id}', 4K連番 '${c4k_seq}', FHD連番 '${fhd_seq}' のデータは既に登録されています。`;
 
       return NextResponse.json(
@@ -154,8 +150,6 @@ export async function POST(request, { params }) {
         { status: 409 }
       );
     }
-    // ============================================================
-
 
     // 8. ファイル名を生成
     const filename = `${lotId}_${camera_id}_${c4k_seq}_${fhd_seq}.png`;
@@ -177,13 +171,13 @@ export async function POST(request, { params }) {
       lotIdRef, camera_id, c4k_seq, fhd_seq, imageDbPath, captured_at || new Date()
     ]);
 
-    // 11. 成功レスポンス (201 Created)
+    // ★修正: 設計書準拠のSSEイベント通知
     emitEvent({
-      type: 'inspection:imageUploaded',
-      lotId,
-      filename,
+      ivent: "inspection:imageUploaded",
+      message: "検査前画像がアップロードされました"
     });
 
+    // 11. 成功レスポンス (201 Created)
     return NextResponse.json(
       {
         message: "検査前画像を登録しました",
@@ -214,14 +208,12 @@ export async function POST(request, { params }) {
  * (DELETE /api/ingress/inspection/{lot_id})
  */
 export async function DELETE(request, { params }) {
-  const client = await pool.connect(); // トランザクションのために接続を専有
-  const lotId = params.lot_id; // URLパスから {lot_id} を取得
+  const client = await pool.connect(); 
+  const lotId = params.lot_id; 
   
   try {
-    // 1. トランザクション開始
     await client.query('BEGIN');
 
-    // 2. lot_id から親ロットの内部ID (lot_id_ref) を取得
     const lotResult = await client.query(
       'SELECT id FROM inspection_lots WHERE lot_id = $1',
       [lotId]
@@ -234,16 +226,14 @@ export async function DELETE(request, { params }) {
         { status: 404 }
       );
     }
-    const lotIdRef = lotResult.rows[0].id; // 親ロットの内部ID
+    const lotIdRef = lotResult.rows[0].id;
 
-    // 3. 削除対象となる画像パスをすべて取得
     const shotsResult = await client.query(
       'SELECT image_path FROM inspection_camera_shots WHERE lot_id_ref = $1 AND image_path IS NOT NULL',
       [lotIdRef]
     );
     const imagePaths = shotsResult.rows.map(row => row.image_path);
     
-    // 4. 物理ファイル削除 (検査前 / 検査後)
     let deleteCount = 0;
     
     for (const dbPath of imagePaths) {
@@ -278,21 +268,17 @@ export async function DELETE(request, { params }) {
       }
     }
 
-    // 5. データベースからデータを削除
-    // inspection_lots を削除すれば ON DELETE CASCADE で子テーブルも自動削除
     const deleteLotQuery = 'DELETE FROM inspection_lots WHERE id = $1';
     await client.query(deleteLotQuery, [lotIdRef]);
 
-    // 6. トランザクション確定
     await client.query('COMMIT'); 
 
+    // ★修正: 設計書準拠のSSEイベント通知
     emitEvent({
-      type: 'inspection:lotDeleted',
-      lotId,
-      deletedFiles: deleteCount,
+      ivent: "inspection:lotDeleted",
+      message: "検査ロットが削除されました"
     });
 
-    // 7. 成功レスポンス
     return NextResponse.json(
       { message: `ロット ${lotId} を削除しました。`, deleted_files: deleteCount },
       { status: 200 }
