@@ -4,18 +4,50 @@ import pool from '@/lib/db';
 /**
  * API: 3. 検査ロット取得 (一覧・ページネーション)
  * (GET /api/inspections/lots?section={section}&date={date}&page={page}&limit={limit})
- *
+ * * 修正: date指定がない場合、自動的に最新のデータが存在する日付を選択します。
  */
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const section = searchParams.get('section'); // 'spring' or 'alayer'
-    const date = searchParams.get('date');       // 'YYYY-MM-DD'
+    const dateParam = searchParams.get('date');  // 'YYYY-MM-DD' (任意)
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = (page - 1) * limit;
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    // --- ステップ 0: 対象日付の決定 (最新日付自動取得ロジック) ---
+    let targetDate = dateParam;
+
+    if (!targetDate) {
+      try {
+        // 日付指定がない場合、DBから最新の日付を取得する
+        let latestDateQuery = `
+          SELECT to_char(captured_at, 'YYYY-MM-DD') as latest_date
+          FROM inspection_lots
+        `;
+        const latestParams = [];
+
+        // セクション指定がある場合は絞り込む
+        if (section) {
+          latestDateQuery += ` WHERE section_code = $1`;
+          latestParams.push(section);
+        }
+
+        latestDateQuery += ` ORDER BY captured_at DESC LIMIT 1`;
+
+        const latestResult = await pool.query(latestDateQuery, latestParams);
+
+        if (latestResult.rows.length > 0) {
+          targetDate = latestResult.rows[0].latest_date;
+        } else {
+          // データが1件もない場合は本日 (UTC)
+          targetDate = new Date().toISOString().split('T')[0];
+        }
+      } catch (e) {
+        console.error('Latest date fetch error:', e);
+        targetDate = new Date().toISOString().split('T')[0];
+      }
+    }
 
     // --- ステップ 1: 総件数と総ページ数 ---
     let whereClause = "WHERE 1=1";
@@ -25,7 +57,9 @@ export async function GET(request) {
       whereClause += ` AND section_code = $${queryParams.length + 1}`;
       queryParams.push(section);
     }
-    whereClause += ` AND (captured_at AT TIME ZONE 'UTC')::date = $${queryParams.length + 1}`;
+    
+    // 決定した targetDate で検索
+    whereClause += ` AND to_char(captured_at, 'YYYY-MM-DD') = $${queryParams.length + 1}`;
     queryParams.push(targetDate);
 
     const countQuery = `SELECT COUNT(*) AS total FROM inspection_lots ${whereClause}`;
