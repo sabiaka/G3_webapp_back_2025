@@ -7,11 +7,11 @@ import time
 plc = pymcprotocol.Type3E()
 
 # === サーバーのエンドポイント ===
-SERVER_URL = "http://localhost:3000/api/test/PLC"  # ←実際のURLに変更
+SERVER_URL = "http://localhost:3000/api/ingress/plc"  # ←実際のURLに変更
 
 # === レジスタと対応表 ===
 ERROR_MAP = {
-    "D0": {2: ("info", "PLC スタンバイ")},
+    "D0": {1: ("info", "PLC スタンバイ")},
     "D100": {1: ("warning", "全ユニット共通エラー")},
     "D101": {1: ("warning", "ユニット1残弾低下")},
     "D102": {1: ("warning", "ユニット2残弾低下")},
