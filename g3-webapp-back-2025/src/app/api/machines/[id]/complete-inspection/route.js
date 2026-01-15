@@ -1,8 +1,40 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 指定機械の点検完了 を登録するAPIを提供します。
+ * スキーマ移行の差異（inspection_interval_days 列あり/なし、next_inspection_date 列あり/なし）に両対応し、
+ * 可能な限り既存の周期を保ちながら最終点検日と次回点検日を返します。
+ */
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
 // 点検の完了 API
 // POST /api/machines/{id}/complete-inspection
+/**
+ * POST /api/machines/{id}/complete-inspection
+ * --------------------------------------
+ * 指定機械の点検完了を登録し、最終点検日/次回点検日を返します。
+ *
+ * 引数（Path Params）
+ * - id   : 数値の machine_id または文字列の machine_name
+ *
+ * リクエストボディ
+ * - なし
+ *
+ * 成功時の戻り値（200）
+ * - machine_id            : 数値。対象機械ID。
+ * - last_inspection_date  : 文字列。最終点検日（YYYY-MM-DD）。
+ * - next_inspection_date  : 文字列。次回点検日（YYYY-MM-DD）。
+ *
+ * エラー
+ * - 404 Machine not found     : 機械未存在。
+ * - 500 Internal Server Error : 予期せぬエラー。
+ *
+ * 実装方針の要点
+ * - スキーマの差（interval列 or next列の有無）を information_schema で検出し分岐。
+ * - 既存行があれば更新、なければ新規作成。
+ * - 旧スキーマでは next_inspection_date を直接維持/更新。新スキーマでは interval から次回日付を算出。
+ */
 export async function POST(request, ctx) {
     const { id } = await ctx.params; // Next.js 15: params は非同期
 

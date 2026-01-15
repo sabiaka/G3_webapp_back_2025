@@ -1,6 +1,26 @@
+/**
+ * ファイルの役割:
+ *   セクション内でデータが存在する日付一覧(降順)を返すAPI。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
+/**
+ * 日付一覧取得 (GET)
+ *
+ * 説明:
+ *   section_codeでフィルタし、captured_atの日付(YYYY-MM-DD)の重複を除いて返す。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @param {{ params: { section: string } }} context           - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: { section, dates }
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   400                                                         - 入力エラー
+ *   500                                                         - サーバ内部エラー
+ */
 export async function GET(request, { params }) {
   try {
     const { section } = await params;

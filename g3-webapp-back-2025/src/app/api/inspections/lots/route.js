@@ -1,10 +1,32 @@
+/**
+ * ファイルの役割:
+ *   検査ロット一覧の取得API。
+ *   セクション・日付・ページングでフィルタし、代表画像/進捗情報とあわせて返す。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
  * API: 3. 検査ロット取得 (一覧・ページネーション)
  * (GET /api/inspections/lots?section={section}&date={date}&page={page}&limit={limit})
- * * 修正: date指定がない場合、自動的に最新のデータが存在する日付を選択します。
+ *
+ * 説明:
+ *   指定がない場合はDBから最新日付を自動選択し、その日付のロットを返す。
+ *   代表画像/表示時刻はショットに従い、見つからない場合は親のcaptured_atを利用。
+ *
+ * I/O:
+ *   @param {Request} request                                   - クエリを含むリクエスト
+ *   @returns {NextResponse}                                     - JSON: { total_pages, current_page, lots }
+ *
+ * クエリ:
+ *   section                                                     - 'spring'|'alayer' (任意)
+ *   date                                                        - 'YYYY-MM-DD' (任意)
+ *   page                                                        - 1以上の整数(既定1)
+ *   limit                                                       - 1以上の整数(既定50)
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request) {
   try {

@@ -1,3 +1,8 @@
+/**
+ * ファイルの役割:
+ *   特定ロットに紐づくショット一覧を返すAPI。
+ *   親ロットの代表時刻も併せて返す。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
@@ -9,6 +14,15 @@ import pool from '@/lib/db';
  * @param {string} context.params.lot_id URLから取得したロットID
  */
 export async function GET(request, { params }) {
+  /**
+   * 説明:
+   *   lot_idでロットを特定し、紐づくショットを取得して返す。
+   *
+   * I/O:
+   *   @param {Request} request                                 - リクエスト
+   *   @param {{ params: { lot_id: string } }} context          - パスパラメータ
+   *   @returns {NextResponse}                                   - JSON: { lot_id, captured_at, shots }
+   */
   try {
     // 1. URLから動的なロットIDを取得
     const { lot_id } = await params;

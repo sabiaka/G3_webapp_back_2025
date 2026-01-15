@@ -1,10 +1,35 @@
-import { NextResponse } from 'next/server';
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 生産サマリー を取得するAPIを提供します。
+ * 今日の集計、期間（週/月）サマリー、期間内の日次トレンド、上位不良理由をまとめて返します。
+ * 期間の週は「日曜〜土曜」で区切り、月は当月全期間で集計します。
+ */
+ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
 /**
  * 生産サマリーデータを取得するAPI (GET) - カレンダー基準
  * @description GET /api/production/summary
  * @param request - period=week または period=month をクエリパラメータで指定
+ *
+ * 引数（Query Params）
+ * - period : 'week' | 'month'（省略時 'week'）。週は日曜開始〜土曜終了、月は当月全期間。
+ *
+ * 成功時の戻り値（200）
+ * - today_summary     : { plan, actual }（当日計画/実績の合計）
+ * - period_summary    : { total_actual, total_defective, yield_rate, defective_reasons }
+ *   - yield_rate      : 実績から不良を除いた歩留まり率（%）。実績が0の場合は 100。
+ *   - defective_reasons : 上位5件の不良理由と件数配列。
+ * - daily_trends      : 期間内の日毎の { date, plan, actual, defective } 配列。
+ *
+ * エラー
+ * - 500 サーバーエラー：DBエラー等。
+ *
+ * 実装方針の要点
+ * - periodに応じてWHERE句を動的組み立て。週は EXTRACT(DOW) を用いて日曜〜土曜を算出。
+ * - SUM/COALESCE を活用し、NULLでも0扱いで集計が途切れないようにする。
+ * - Promise.all で複数クエリを並列実行し、レスポンスをひとまとめに返す。
  */
 export async function GET(request) {
   try {

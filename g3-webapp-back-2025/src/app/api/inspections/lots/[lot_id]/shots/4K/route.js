@@ -1,3 +1,7 @@
+/**
+ * ファイルの役割:
+ *   指定ロットの4Kショットを重複排除して一覧返却し、OK/NG率も集計するAPI。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
@@ -5,6 +9,19 @@ import pool from '@/lib/db';
  * API 3.1: 4Kショット一覧（重複排除） + ★進捗集計 (OK/NG率)
  * (GET /api/inspections/lots/{lot_id}/shots/4K)
  * ★JSONキーを "c4k_seq" に変更
+ *
+ * 説明:
+ *   c4k_seqごとに最新1件を代表として返却し、PASS/その他(NG)の比率を算出する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @param {{ params: { lot_id: string } }} context            - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: { lot_id, summary, shots }
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   404                                                         - ロット未発見
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request, context) {
   const { lot_id } = await context.params; 
