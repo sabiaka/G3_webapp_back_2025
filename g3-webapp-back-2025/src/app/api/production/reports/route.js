@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
@@ -17,28 +16,29 @@ import db from '@/lib/db';
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
- *
- * 引数（Query Params）
- * - date          : 文字列 'YYYY-MM-DD'。その日付のレポートに絞り込み。
- * - product_name  : 文字列。部分一致（ILIKE）で製品名に一致するレポートに絞り込み。
- *
- * 成功時の戻り値（200）
- * - id                : 数値。レポートID。
- * - date              : 文字列 'YYYY-MM-DD'。
- * - product_name      : 文字列。製品名。
- * - plan              : 数値。計画数量。
- * - actual            : 数値。実績数量。
- * - achievement_rate  : 数値。達成率（DB格納値）。
- * - defective         : 数値。不良数量。
- * - employee_name     : 文字列。担当従業員名（未割り当て時は『未割り当て』）。
- *
- * エラー
- * - 500 サーバーエラー：DBエラー等。
- *
- * 実装方針の要点
- * - 基本SELECTに対して WHERE句を動的組み立て。$1, $2... プレースホルダでインジェクション防止。
- * - 製品名は ILIKE により部分一致・ケース非依存。
- */
+
+    /**
+     * 引数（Query Params）
+     * - date          : 文字列 'YYYY-MM-DD'。その日付のレポートに絞り込み。
+     * - product_name  : 文字列。部分一致（ILIKE）で製品名に一致するレポートに絞り込み。
+     *
+     * 成功時の戻り値（200）
+     * - id                : 数値。レポートID。
+     * - date              : 文字列 'YYYY-MM-DD'。
+     * - product_name      : 文字列。製品名。
+     * - plan              : 数値。計画数量。
+     * - actual            : 数値。実績数量。
+     * - achievement_rate  : 数値。達成率（DB格納値）。
+     * - defective         : 数値。不良数量。
+     * - employee_name     : 文字列。担当従業員名（未割り当て時は『未割り当て』）。
+     *
+     * エラー
+     * - 500 サーバーエラー：DBエラー等。
+     *
+     * 実装方針の要点
+     * - 基本SELECTに対して WHERE句を動的組み立て。$1, $2... プレースホルダでインジェクション防止。
+     * - 製品名は ILIKE により部分一致・ケース非依存。
+     */
     const date = searchParams.get('date');
     const productName = searchParams.get('product_name');
 
