@@ -1,8 +1,28 @@
+/**
+ * ファイルの役割:
+ *   生産ラインの単一リソースに対する更新・削除API。
+ *   パスの line_id で対象を特定し、名称更新または物理削除を行う。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
 /**
  * 指定されたIDの生産ラインを更新するAPI (PUT)
+ *
+ * 説明:
+ *   line_idで特定した行のline_nameを更新する。一意制約違反時は409。
+ *
+ * I/O:
+ *   @param {Request} request                                   - JSONボディを含むリクエスト
+ *   @param {{ params: { id: string } }} context                - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: 更新後のライン
+ *
+ * ステータス:
+ *   200                                                         - 更新成功
+ *   400                                                         - 入力エラー
+ *   404                                                         - 指定IDなし
+ *   409                                                         - 一意制約違反
+ *   500                                                         - サーバ内部エラー
  */
 export async function PUT(request, { params }) {
   try {
@@ -55,6 +75,21 @@ export async function PUT(request, { params }) {
 
 /**
  * 指定されたIDの生産ラインを削除するAPI (DELETE)
+ *
+ * 説明:
+ *   line_idで特定して物理削除する。FK制約により削除できない場合は409。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @param {{ params: { id: string } }} context                - パスパラメータ
+ *   @returns {NextResponse}                                     - 204 No Content
+ *
+ * ステータス:
+ *   204                                                         - 削除成功
+ *   400                                                         - 入力エラー
+ *   404                                                         - 指定IDなし
+ *   409                                                         - 参照制約(従業員割当あり)
+ *   500                                                         - サーバ内部エラー
  */
 export async function DELETE(request, { params }) {
   try {

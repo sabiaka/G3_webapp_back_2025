@@ -1,3 +1,12 @@
+/**
+ * ファイルの役割:
+ *   PLCからのログを受け取り、DB保存とイベント通知を行うAPIルート。
+ *
+ * 実装ポリシー:
+ *   - 必須項目(timestamp, machine_name, log_type, title)を検証。
+ *   - DBには生SQL + プレースホルダで安全にINSERT。
+ *   - SSE通知用にイベントバスへ発行。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { emitEvent } from '@/lib/event-bus'; // ★変更: 既存のEvent Busを使用
@@ -5,6 +14,26 @@ import { emitEvent } from '@/lib/event-bus'; // ★変更: 既存のEvent Busを
 /**
  * PLCログ情報送信API (POST)
  * 設計書セクション: 3
+ *
+ * 説明:
+ *   PLC由来のログを受け取り、DBへ永続化後にイベントバスへ通知する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - JSONボディを含むリクエスト
+ *   @returns {NextResponse}                                     - JSON: 受け付け結果
+ *
+ * リクエスト(JSON):
+ *   timestamp                                                   - ログ時刻(必須)
+ *   machine_name                                                - 機械名(必須)
+ *   log_type                                                    - ログ種別(error|warning|info)(必須)
+ *   title                                                       - タイトル(必須)
+ *   message                                                     - 本文(任意)
+ *   unit_id                                                     - ユニットID(任意)
+ *
+ * ステータス:
+ *   202                                                         - 受理
+ *   400                                                         - 入力エラー/制約違反
+ *   500                                                         - サーバ内部エラー
  */
 export async function POST(request) {
   try {

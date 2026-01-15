@@ -1,9 +1,29 @@
+/**
+ * ファイルの役割:
+ *   製造指示の単一リソースに対する更新・削除API。
+ *   パスのIDでレコードを特定し、差分更新または物理削除を行う。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
 /**
  * 指定されたIDの製造指示を更新するAPI (PUT)
  * @description PUT /api/instructions/:id
+ *
+ * 説明:
+ *   受け取ったJSONのキー→DBカラムへマッピングして差分UPDATEする。
+ *   created_at/notification_data_time の任意更新も許容し、形式を検証する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - JSONボディを含むリクエスト
+ *   @param {{ params: { id: string } }} context                - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: 更新後レコード
+ *
+ * ステータス:
+ *   200                                                         - 更新成功
+ *   400                                                         - 入力エラー/更新対象なし
+ *   404                                                         - 指定IDなし
+ *   500                                                         - サーバ内部エラー
  */
 export async function PUT(request, { params }) {
   try {
@@ -27,6 +47,7 @@ export async function PUT(request, { params }) {
     let paramIndex = 1;
 
     // 作成日時の任意更新（created_at または notification_data_time）
+    // なぜ: 作成日を後から修正できるようユースケースに対応
     const requestedTimestamp = body.created_at ?? body.notification_data_time ?? null;
     if (requestedTimestamp !== null) {
       const parsed = Date.parse(requestedTimestamp);
@@ -91,6 +112,19 @@ export async function PUT(request, { params }) {
 /**
  * 指定されたIDの製造指示を削除するAPI (DELETE)
  * @description DELETE /api/instructions/:id
+ *
+ * 説明:
+ *   指定IDを物理削除する。存在しない場合は404を返す。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @param {{ params: { id: string } }} context                - パスパラメータ
+ *   @returns {NextResponse}                                     - 204 No Content
+ *
+ * ステータス:
+ *   204                                                         - 削除成功
+ *   404                                                         - 指定IDなし
+ *   500                                                         - サーバ内部エラー
  */
 export async function DELETE(request, { params }) {
   try {

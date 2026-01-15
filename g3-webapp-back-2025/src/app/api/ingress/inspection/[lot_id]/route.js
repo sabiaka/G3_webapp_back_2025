@@ -1,3 +1,13 @@
+/**
+ * ファイルの役割:
+ *   【検査前(単発)アップロード】と【特定ロット削除】のAPIルート。
+ *   パスの lot_id 単位で、単発の検査前画像を登録/ロット全体を削除する機能を提供する。
+ *
+ * 実装ポリシー:
+ *   - multipart/form-dataの必須パーツとmetadata必須項目を厳格に検証。
+ *   - ファイル保存→DB登録の順で行い、整合性に注意。
+ *   - 削除時はDBとファイルの両方を確実に削除(可能な範囲で)し、トランザクションで保護。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { writeFile } from 'fs/promises';
@@ -16,6 +26,25 @@ import { emitEvent } from '@/lib/event-bus';
 /**
  * API: 6. 【検査前】画像アップロード（lot_id指定・単発）(A層検査用)
  * (POST /api/ingress/inspection/{lot_id})
+ *
+ * 説明:
+ *   lot_idとsection_codeをキーに親ロットを特定し、単発の検査前画像とショット情報を登録する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - multipart/form-data を受け取るリクエスト
+ *   @param {{ params: { lot_id: string } }} context            - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: 登録結果
+ *
+ * リクエスト(form-data):
+ *   metadata                                                    - JSON文字列。{ camera_id, 4K_seq, FHD_seq, section_code, captured_at? }
+ *   image                                                       - 検査前画像ファイル(Binary)
+ *
+ * ステータス:
+ *   201                                                         - 登録成功
+ *   400                                                         - 入力エラー
+ *   404                                                         - 親ロット未発見
+ *   409                                                         - 重複登録
+ *   500                                                         - サーバ内部エラー
  */
 export async function POST(request, { params }) {
   let client; 
@@ -119,6 +148,7 @@ export async function POST(request, { params }) {
 
     // ============================================================
     // 重複チェック
+    // なぜ: 同一(camera_id, c4k_seq, fhd_seq) の二重登録を防止するため
     // ============================================================
     const duplicateCheckQuery = `
       SELECT id FROM inspection_camera_shots 
@@ -156,11 +186,13 @@ export async function POST(request, { params }) {
     const imageDbPath = buildBeforeImageUrl(filename);
     
     // 9. 画像ファイルをサーバーに保存
+    // なぜ: DBにはパスを保持し、実体はストレージに置く分離設計
     const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
     const savePath = await prepareImageTarget(imageDbPath);
     await writeFile(savePath, imageBuffer);
 
     // 10. (DB処理 2) inspection_camera_shots にデータを INSERT
+    // なぜ: 初期状態は 'MISSING' とし、後段の検査結果登録で更新される想定
     const insertQuery = `
       INSERT INTO inspection_camera_shots (
         lot_id_ref, camera_id, c4k_seq, fhd_seq, status, image_path, captured_at
@@ -206,6 +238,19 @@ export async function POST(request, { params }) {
 /**
  * API: 13. 特定ロットの削除 (DB + 画像ファイル)
  * (DELETE /api/ingress/inspection/{lot_id})
+ *
+ * 説明:
+ *   指定lot_idの親レコードを特定し、ひも付く検査前/検査後画像の物理削除を試みたあとにロットを削除する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @param {{ params: { lot_id: string } }} context            - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: 削除結果と削除ファイル数
+ *
+ * ステータス:
+ *   200                                                         - 削除成功
+ *   404                                                         - ロット未発見
+ *   500                                                         - サーバ内部エラー
  */
 export async function DELETE(request, { params }) {
   const client = await pool.connect(); 

@@ -1,3 +1,10 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは「今日のお知らせ（today_message）」を取得・更新するAPIを提供します。
+ * レコードは message_id=1 の単一行を前提とし、存在しない場合はPUT時にUPSERTで作成します。
+ * 優先度はDB上の数値(1/2/3)をレスポンスでは「低い/普通/高い」に変換して返却します。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // 従業員APIと同じdbインスタンスをインポート
 
@@ -21,8 +28,24 @@ const convertPriorityToText = (priority) => {
 };
 
 /**
- * 1. お知らせ取得 (GET)
- * エンドポイント: GET /api/message
+ * GET /api/message
+ * --------------------------------------
+ * 今日のお知らせを取得します。存在しない場合は空の初期データを返します。
+ *
+ * 引数（Query Params）
+ * - なし
+ *
+ * 成功時の戻り値（200）
+ * - content     : 文字列。お知らせ本文。
+ * - priority    : 文字列。「低い」「普通」「高い」のいずれか。
+ * - updated_at  : 文字列。更新日時（ISO形式）。
+ *
+ * エラー
+ * - 500 サーバーエラー : DBアクセス等で異常が発生した場合。
+ *
+ * 実装方針の要点
+ * - today_message テーブルの message_id=1 を取得。存在しない場合はフロント仕様に合わせ初期値で返却。
+ * - 優先度はヘルパーで数値→テキスト化し、UI仕様に揃える。
  */
 export async function GET(request) {
   try {
@@ -62,8 +85,27 @@ export async function GET(request) {
 }
 
 /**
- * 2. お知らせ更新 (PUT)
- * エンドポイント: PUT /api/message
+ * PUT /api/message
+ * --------------------------------------
+ * 今日のお知らせを更新します。レコードが無い場合はUPSERTで新規作成します。
+ *
+ * リクエストボディ（JSON）
+ * - content   : 文字列。お知らせ本文（必須）。
+ * - priority  : 数値。1|2|3 のいずれか（必須）。
+ *
+ * 成功時の戻り値（200）
+ * - content     : 文字列。更新後のお知らせ本文。
+ * - priority    : 文字列。「低い」「普通」「高い」。
+ * - updated_at  : 文字列。更新日時（ISO形式）。
+ *
+ * エラー
+ * - 400 入力不足/不正 : content/priority が不足、または priority が 1|2|3 以外。
+ * - 500 サーバーエラー : DBアクセス等で異常が発生した場合。
+ *
+ * 実装方針の要点
+ * - ON CONFLICT (message_id) DO UPDATE を用いて単一レコードを維持しつつ更新。
+ * - updated_at はDB側で NOW() により更新。
+ * - レスポンスでは優先度をテキスト化して返し、フロント仕様と整合。
  */
 export async function PUT(request) {
   try {

@@ -1,9 +1,38 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 指定ラック内の特定スロット の部品情報を作成/更新/削除するAPIを提供します。
+ * part_model_number は null許容とし、POSTはUpsert、PUTは更新、DELETEは物理削除です。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // データベース接続
 
 // =================================================================
 // POST: 新規格納 or 情報の上書き (Upsert)
 // =================================================================
+/**
+ * POST /api/racks/{rack_id}/slots/{slot_identifier}
+ * --------------------------------------
+ * 指定スロットの部品情報をUpsertします。存在すれば更新、無ければ挿入。
+ *
+ * 引数（Path Params）
+ * - rack_id         : 数値または文字列（DB側FKで検証）
+ * - slot_identifier : 文字列（例: "A-1"）
+ *
+ * リクエストボディ（JSON）
+ * - part_name         : 文字列（必須）
+ * - part_model_number : 文字列 | null（未指定や空はnull）
+ * - quantity          : 数値（必須）
+ * - color_code        : 文字列（必須） 例: "#RRGGBB"
+ *
+ * 成功時の戻り値（200）
+ * - message と slotオブジェクト（最新状態）
+ *
+ * エラー
+ * - 400 必須項目不足            : part_name/quantity/color_code の不足。
+ * - 404 指定棚が存在しない      : FK違反時。
+ * - 500 サーバーエラー          : DBエラー等。
+ */
 export async function POST(request, ctx) {
   const { rack_id, slot_identifier } = await ctx.params;
   try {
@@ -84,6 +113,22 @@ export async function POST(request, ctx) {
 // =================================================================
 // PUT: 既存の部品情報の編集 (Update)
 // =================================================================
+/**
+ * PUT /api/racks/{rack_id}/slots/{slot_identifier}
+ * --------------------------------------
+ * 既存スロットの部品情報を更新します。
+ *
+ * リクエストボディ（JSON）
+ * - part_name, part_model_number(null許容), quantity, color_code
+ *
+ * 成功時の戻り値（200）
+ * - message と slotオブジェクト（最新状態）
+ *
+ * エラー
+ * - 400 必須項目不足            : 入力不足。
+ * - 404 編集対象が存在しない    : 指定ラック/スロット未存在。
+ * - 500 サーバーエラー          : DBエラー等。
+ */
 export async function PUT(request, ctx) {
   const { rack_id, slot_identifier } = await ctx.params;
   try {
@@ -156,6 +201,18 @@ export async function PUT(request, ctx) {
 // =================================================================
 // DELETE: スロットの行を完全に削除
 // =================================================================
+/**
+ * DELETE /api/racks/{rack_id}/slots/{slot_identifier}
+ * --------------------------------------
+ * 指定スロットの行を物理削除します。
+ *
+ * 成功時の戻り値（200）
+ * - message : 文字列。削除完了メッセージ。
+ *
+ * エラー
+ * - 404 削除対象が存在しない    : 指定ラック/スロット未存在。
+ * - 500 サーバーエラー          : DBエラー等。
+ */
 export async function DELETE(request, ctx) {
   const { rack_id, slot_identifier } = await ctx.params;
   try {

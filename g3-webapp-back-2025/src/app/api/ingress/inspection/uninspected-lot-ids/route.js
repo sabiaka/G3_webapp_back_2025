@@ -1,9 +1,26 @@
+/**
+ * ファイルの役割:
+ *   指定セクションで未検査(MISSING)のロット一覧を返すAPIルート。
+ *   ロットごとに未検査のimage_pathを配列で集約して返す。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // 修正済みのDB接続プール
 
 /**
  * API: 9. 未検査ロットIDと画像ファイルパスの取得
  * (GET /api/ingress/inspection/uninspected-lot-ids?section={section})
+ *
+ * 説明:
+ *   セクション内で `status = 'MISSING'` のショットに紐づくロットを集約し、古い順に返す。
+ *
+ * I/O:
+ *   @param {Request} request                                   - クエリにsectionを含むリクエスト
+ *   @returns {NextResponse}                                     - JSON: { lots: Array<{ lot_id, image_paths: string[] }> }
+ *
+ * ステータス:
+ *   200                                                         - 取得成功
+ *   400                                                         - 入力エラー
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request) {
   

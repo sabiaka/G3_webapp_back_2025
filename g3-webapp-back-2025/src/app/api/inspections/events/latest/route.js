@@ -1,8 +1,24 @@
+/**
+ * ファイルの役割:
+ *   検査ロットの最新作成時刻を返すイベントAPI。
+ *   最後に作成されたレコードのcreated_atを1件だけ返す。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
  * 最新のイベント情報（最後に登録されたロットの作成時刻）を返す (GET)
+ *
+ * 説明:
+ *   inspection_lotsをid降順で1件取得し、そのcreated_atを返却する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @returns {NextResponse}                                     - JSON: { latest_event_time }
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request) {
   try {

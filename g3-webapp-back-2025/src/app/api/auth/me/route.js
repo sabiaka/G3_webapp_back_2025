@@ -1,3 +1,9 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 認証済みユーザー情報の取得API を提供します。
+ * Authorization: Bearer <token> で受け取り、JWT検証後にDBから最新のユーザー情報を返します。
+ */
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import db from '@/lib/db';
@@ -9,8 +15,26 @@ const debug = (...args) => {
 	}
 };
 
-// GET /api/auth/me
-// Authorization: Bearer <token>
+/**
+ * GET /api/auth/me
+ * --------------------------------------
+ * ログイン中のユーザー情報を返します。JWTを検証し、DBの最新状態を参照します。
+ *
+ * ヘッダー
+ * - Authorization: Bearer <token>
+ *
+ * 成功時の戻り値（200）
+ * - { employee_id, employee_name, role_id, role_name, is_admin, employee_color_code }
+ * - _debug（DEBUG_AUTH=1の時のみ）: トークン由来の補助情報
+ *
+ * エラー
+ * - 401 Unauthorized : Bearer欠如/無効トークン/ユーザー未存在/非アクティブ等。
+ * - 500 Server DB error : DB接続・クエリ失敗。
+ *
+ * 実装方針の要点
+ * - JWTを検証し、payloadの employee_id でDBから最新行を取得（roles JOIN）。
+ * - DEBUG_AUTH=1 のとき詳細ログを出力し、診断を容易にする。
+ */
 export async function GET(request) {
 	const start = Date.now();
 	try {

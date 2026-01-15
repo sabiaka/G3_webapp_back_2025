@@ -1,3 +1,10 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは ログインAPI を提供します。生SQL + db.query でユーザーを検索し、
+ * bcrypt/平文フォールバックで認証後、JWTを7日で発行します。JWT_SECRETが未設定の場合は
+ * 自動生成して .env に保存する実装を含みます（検証用）。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import bcrypt from 'bcrypt';
@@ -50,15 +57,28 @@ function generateAndSaveJwtSecret() {
   }
 }
 
-/*
+/**
  * POST /api/auth/login
- * 要件: registerと同様にPrisma風ではなく生SQL + db.query を使用
- * 手順:
- *  1. 入力バリデーション
- *  2. ユーザー取得 (employee_user_id)
- *  3. activeチェック
- *  4. パスワード検証（bcrypt / 平文フォールバック）
- *  5. JWT発行
+ * --------------------------------------
+ * ログイン処理を行います。employee_user_id と password の検証後、JWTを返します。
+ *
+ * リクエストボディ（JSON）
+ * - employee_user_id : 文字列（必須）
+ * - password         : 文字列（必須）
+ *
+ * 成功時の戻り値（200）
+ * - access_token : 文字列（JWT / 有効期限 7日）
+ * - user         : { employee_id, employee_name, role_id, role_name, is_admin }
+ *
+ * エラー
+ * - 400 入力不足                 : 必須項目未指定。
+ * - 401 認証失敗                 : ID/パスワード不一致、非アクティブ、不正トークン。
+ * - 500 サーバーエラー           : DB/SECRET生成失敗など。
+ *
+ * 実装方針の要点
+ * - 生SQL + パラメータ化でユーザー検索。roles を LEFT JOIN して管理権限を取得。
+ * - パスワードは bcrypt 比較。旧仕様の平文保存にフォールバック対応。
+ * - JWT_SECRET 未設定時は自動生成（検証用途）。本番では運用手順で設定推奨。
  */
 export async function POST(request) {
   try {

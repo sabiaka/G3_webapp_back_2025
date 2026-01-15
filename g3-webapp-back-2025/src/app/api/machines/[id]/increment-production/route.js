@@ -1,3 +1,9 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 生産数のインクリメント と ロットIDの更新 を同一トランザクションで実行するAPIを提供します。
+ * sectionごとにロットIDのプレフィックスを切り替え、連番部をゼロ埋めで加算して新規ロットを作成します。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // データベース接続プール
 import { emitEvent } from '@/lib/event-bus';
@@ -36,6 +42,28 @@ function getNextLotId(currentLotId) {
 /**
  * API: 5. 生産数をインクリメント（lot_idも加算）
  * (POST /api/machines/{id}/increment-production?section={section})
+ * --------------------------------------
+ * 指定機械の当日生産数を +1 し、指定セクションの最新ロットIDから次ロットを採番して登録します。
+ *
+ * 引数（Path Params）
+ * - id        : 数値の machine_id または文字列の machine_name
+ *
+ * 引数（Query Params）
+ * - section   : 'spring' | 'alayer'（必須）
+ *
+ * 成功時の戻り値（200）
+ * - today_production_count : 数値。更新後の当日生産数。
+ * - lot_id                 : 文字列。新規作成されたロットID。
+ *
+ * エラー
+ * - 400 Bad Request            : section が未指定/不正。
+ * - 404 Machine not found      : 機械未存在。
+ * - 500 Internal Server Error  : 予期せぬエラー。
+ *
+ * 実装方針の要点
+ * - トランザクションで生産数更新とロット採番/挿入を一括確定（整合性担保）。
+ * - ロットIDは <PREFIX><ゼロ埋め連番> 形式をバリデーションしつつ加算。
+ * - SSE通知は設計書準拠のイベントキーで発火（既存実装は保持）。
  */
 export async function POST(request, context) {
   const client = await pool.connect(); 

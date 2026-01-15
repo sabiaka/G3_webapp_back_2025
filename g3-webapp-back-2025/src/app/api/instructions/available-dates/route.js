@@ -1,15 +1,32 @@
+/**
+ * ファイルの役割:
+ *   製造指示が存在する日付一覧(降順)と各日の件数を返すAPI。
+ *   ::date によりサーバ側タイムゾーン(JST前提)で日単位集計する。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
 /**
- * 利用可能な日付ごとの件数一覧を返すAPI
+ * 利用可能な日付ごとの件数一覧を返すAPI (GET)
  * GET /api/instructions/available-dates
  *
+ * 説明:
+ *   notifications の notification_data_time から日付を抽出し、日付ごとに件数を集計する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - クエリを含むリクエスト
+ *   @returns {NextResponse}                                     - JSON: Array<{ date: string, count: number }>
+ *
  * クエリ:
- * - limit: 返却件数の上限（省略可 / 正の整数）
+ *   limit                                                       - 返却件数の上限(正の整数, 任意)
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   400                                                         - 入力エラー
+ *   500                                                         - サーバ内部エラー
  *
  * レスポンス例:
- * [{ "date": "2025-08-04", "count": 12 }, { "date": "2025-08-03", "count": 7 }]
+ *   [{ "date": "2025-08-04", "count": 12 }, { "date": "2025-08-03", "count": 7 }]
  */
 export async function GET(request) {
     try {
@@ -38,6 +55,7 @@ export async function GET(request) {
     sql += ' GROUP BY d ORDER BY d DESC';
 
         // limit 指定があれば付与
+        // なぜ: 大量データ時のレスポンス抑制とUI負荷軽減のため
         if (limitParam !== null) {
             const limit = Number(limitParam);
             if (!Number.isInteger(limit) || limit <= 0) {

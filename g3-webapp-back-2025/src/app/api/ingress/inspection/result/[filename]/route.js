@@ -1,3 +1,8 @@
+/**
+ * ファイルの役割:
+ *   【検査後(単発)更新】のAPIルート。
+ *   filenameに紐づくショットを1件特定し、結果と任意の後画像を更新する。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // 修正済みのDB接続プール
 import { writeFile } from 'fs/promises'; // 画像保存用
@@ -8,6 +13,26 @@ import { emitEvent } from '@/lib/event-bus';
  * API: 7. 【検査後】結果と画像の送信（filename指定・単発）
  * (PUT /api/ingress/inspection/result/{filename})
  * ★重複チェック機能付き
+ *
+ * 説明:
+ *   DBの image_path 末尾一致でショットを特定し、status/details/captured_atを更新する。
+ *   画像が送られてきた場合はAFTER画像を保存する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - multipart/form-data リクエスト
+ *   @param {{ params: { filename: string } }} context          - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: 更新結果
+ *
+ * リクエスト(form-data):
+ *   metadata                                                    - JSON文字列。{ status('PASS'|'FAIL'), details?, captured_at? }
+ *   image                                                       - 検査後画像(Binary, 任意)
+ *
+ * ステータス:
+ *   200                                                         - 更新成功
+ *   400                                                         - 入力エラー
+ *   404                                                         - 該当なし
+ *   409                                                         - 複数一致(データ重複)
+ *   500                                                         - サーバ内部エラー
  */
 export async function PUT(request, context) {
   const client = await pool.connect(); // トランザクションのために接続を専有
@@ -91,6 +116,7 @@ export async function PUT(request, context) {
     // -------------------------------------
 
     // 7. (任意) 検査後画像ファイルが送信されていれば保存
+    // なぜ: AFTER画像は検査結果の補助情報のため、任意扱い
     if (imageFile) {
       const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
       const imageUrl = buildAfterImageUrl(filename);
