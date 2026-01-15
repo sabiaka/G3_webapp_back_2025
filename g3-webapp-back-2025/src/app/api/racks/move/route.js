@@ -22,7 +22,7 @@ export async function POST(request) {
       to_slot_identifier
     } = await request.json();
 
-     *
+    /**
      * リクエストボディ（JSON）
      * - from_rack_id        : 数値または文字列
      * - from_slot_identifier: 文字列
