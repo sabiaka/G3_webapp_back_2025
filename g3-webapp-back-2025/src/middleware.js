@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 
-// 10.0.0.0/8 の IPv4 アドレスかを判定
-function isPrivate10Origin(origin) {
+// 10.0.0.0/8 または ローカルホスト系を許可
+function isAllowedOrigin(origin) {
     if (!origin) return false;
     try {
         const url = new URL(origin);
         const host = url.hostname; // 例: "10.1.2.3"
+
+        if (host === 'localhost' || host === '127.0.0.1') {
+            return true;
+        }
         // IPv6 やホスト名は対象外。単純な 10.*.*.* (IPv4) を許可
         const m = host.match(/^10\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
         if (!m) return false;
@@ -53,7 +57,7 @@ export function middleware(request) {
         return NextResponse.next();
     }
 
-    const allowed = isPrivate10Origin(origin);
+    const allowed = isAllowedOrigin(origin);
 
     if (!allowed) {
         // 許可対象外: 通常リクエストはCORSヘッダなしで通し、ブラウザ側でブロックさせる

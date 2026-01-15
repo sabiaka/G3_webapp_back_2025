@@ -156,10 +156,12 @@ CREATE TABLE inspection_camera_shots (
     id BIGSERIAL PRIMARY KEY,                                                   -- ショット内部ID（連番）
     lot_id_ref BIGINT NOT NULL REFERENCES inspection_lots(id) ON DELETE CASCADE,-- ロット参照ID
     camera_id VARCHAR(64) NOT NULL,                                             -- カメラID（例: 'B-spring01', 'A-main01'）
+    c4k_seq VARCHAR(32) NULL,                                                    -- 設計書6用
+    fhd_seq VARCHAR(32) NULL,                                                   -- 設計書6用
+    shot_seq INT NULL,                                            -- 同一カメラ内の通番（1..n）
     status VARCHAR(16) NOT NULL CHECK (status IN ('PASS','FAIL','MISSING')),    -- 判定ステータス
     details TEXT NULL,                                                          -- 不良理由等（PASS時はNULL推奨）
     image_path TEXT NULL,                                                       -- 画像パス（MISSING時はNULL可）
-    shot_seq INT NOT NULL DEFAULT 1,                                            -- 同一カメラ内の通番（1..n）
     captured_at TIMESTAMP WITH TIME ZONE NULL                                   -- ショット撮影時刻
 );
 
@@ -216,7 +218,28 @@ CREATE TABLE slots (
 
 
 
+--【今日のお知らせテーブル】
+CREATE TABLE today_message (
+    message_id INT PRIMARY KEY DEFAULT 1,       -- 常にID=1のレコードだけを使う
+    content TEXT,                               -- お知らせの本文
+    priority INT DEFAULT 1,                       -- 重要度 (1:低い, 2:普通, 3:高い)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- 最終更新日時
+);
 
+
+
+--【日報テーブル】
+CREATE TABLE daily_reports (
+    report_id SERIAL PRIMARY KEY,                                -- 日報ID (自動採番)
+    employee_id INT NOT NULL,                                    -- 従業員ID (FK)
+    line_id INT NOT NULL,                                        -- ラインID (FK)
+    report_date DATE NOT NULL,                                   -- 報告日 (例: '2025-11-05')
+    notes TEXT,                                                  -- 備考・特記事項 (日記内容)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,              -- 作成日時
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,              -- 更新日時
+    FOREIGN KEY (employee_id) REFERENCES employees (employee_id),
+    FOREIGN KEY (line_id) REFERENCES production_lines (line_id)
+);
 
 
 

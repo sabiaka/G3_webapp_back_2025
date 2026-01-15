@@ -18,3 +18,4 @@ DROP TABLE IF EXISTS machine_status;
 DROP TABLE IF EXISTS employees;
 DROP TABLE IF EXISTS inspection_results;
 DROP TABLE IF EXISTS inspection_lots;
+DROP TABLE IF EXISTS inspection_camera_shots;

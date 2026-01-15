@@ -1,5 +1,3 @@
-
-
 import json
 import datetime as dt
 import threading
@@ -42,11 +40,29 @@ def save_config(data: dict):
         pass
 
 
-class PutInspectionGUI(tk.Tk):
+def _normalize_base_host(value: str) -> str:
+    """ホストのみのベースURLへ正規化する（例: http://localhost:3001）。
+    もし '/api/ingress/inspection' などの固定パスが含まれていたら取り除く。
+    """
+    default_host = 'http://10.100.54.170:3001'
+    if not value:
+        return default_host
+    trimmed = value.strip()
+    if trimmed in ('http://', 'https://', 'http:///', 'https:///'):
+        return default_host
+    # 既にパスを含む場合はホスト部だけ残す
+    prefix = '/api/ingress/inspection'
+    if prefix in trimmed:
+        trimmed = trimmed.split(prefix, 1)[0]
+    trimmed = trimmed.rstrip('/')
+    return trimmed
+
+
+class PostInspectionBulkGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title('検査後データ 送信ツール (PUT /api/ingress/inspection/result/{filename})')
-        self.geometry('820x640')
+        self.title('検査結果 一括登録ツール (POST /api/ingress/inspection/batch/{lot_id})')
+        self.geometry('860x700')
         self._build_widgets()
         self._load_initial_values()
         self.protocol('WM_DELETE_WINDOW', self.on_close)
@@ -56,16 +72,21 @@ class PutInspectionGUI(tk.Tk):
         frm = ttk.Frame(self)
         frm.pack(fill=tk.BOTH, expand=True)
 
-        # URL base
+        # URL base（ホストのみ選択。APIパスは内部で付与）
         ttk.Label(frm, text='サーバURL (ベース)').grid(row=0, column=0, sticky='e', **pad)
-        self.url_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.url_var, width=70).grid(row=0, column=1, columnspan=2, sticky='we', **pad)
+        self.base_url_var = tk.StringVar()
+        self.base_url_choices = [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://10.100.54.170:3001',
+        ]
+        self.base_url_combo = ttk.Combobox(frm, textvariable=self.base_url_var, values=self.base_url_choices, width=70)
+        self.base_url_combo.grid(row=0, column=1, columnspan=2, sticky='we', **pad)
 
-        # filename
-        ttk.Label(frm, text='対象ファイル名 (filename)').grid(row=1, column=0, sticky='e', **pad)
-        self.filename_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.filename_var, width=50).grid(row=1, column=1, sticky='w', **pad)
-        ttk.Button(frm, text='前回のPOST結果から推測', command=self._suggest_from_post).grid(row=1, column=2, sticky='w', **pad)
+        # lot_id
+        ttk.Label(frm, text='ロットID (lot_id)').grid(row=1, column=0, sticky='e', **pad)
+        self.lot_var = tk.StringVar()
+        ttk.Entry(frm, textvariable=self.lot_var, width=40).grid(row=1, column=1, sticky='w', **pad)
 
         # section_code
         ttk.Label(frm, text='工程 (section_code)').grid(row=2, column=0, sticky='e', **pad)
@@ -77,50 +98,51 @@ class PutInspectionGUI(tk.Tk):
         self.section_combo = ttk.Combobox(frm, textvariable=self.section_var, values=list(self.section_map.keys()), state='readonly', width=30)
         self.section_combo.grid(row=2, column=1, sticky='w', **pad)
 
-        # lot_id
-        ttk.Label(frm, text='ロットID (lot_id)').grid(row=3, column=0, sticky='e', **pad)
-        self.lot_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.lot_var, width=30).grid(row=3, column=1, sticky='w', **pad)
-
         # camera_id
-        ttk.Label(frm, text='カメラID (camera_id)').grid(row=4, column=0, sticky='e', **pad)
+        ttk.Label(frm, text='カメラID (camera_id)').grid(row=3, column=0, sticky='e', **pad)
         self.camera_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.camera_var, width=30).grid(row=4, column=1, sticky='w', **pad)
+        ttk.Entry(frm, textvariable=self.camera_var, width=30).grid(row=3, column=1, sticky='w', **pad)
 
         # shot_seq
-        ttk.Label(frm, text='ショット番号 (shot_seq)').grid(row=5, column=0, sticky='e', **pad)
+        ttk.Label(frm, text='ショット番号 (shot_seq)').grid(row=4, column=0, sticky='e', **pad)
         self.shot_var = tk.IntVar(value=1)
-        ttk.Spinbox(frm, from_=1, to=99999, textvariable=self.shot_var, width=10).grid(row=5, column=1, sticky='w', **pad)
+        ttk.Spinbox(frm, from_=1, to=99999, textvariable=self.shot_var, width=10).grid(row=4, column=1, sticky='w', **pad)
 
         # status
-        ttk.Label(frm, text='結果 (status)').grid(row=6, column=0, sticky='e', **pad)
+        ttk.Label(frm, text='結果 (status)').grid(row=5, column=0, sticky='e', **pad)
         self.status_var = tk.StringVar()
         self.status_combo = ttk.Combobox(frm, textvariable=self.status_var, values=['OK', 'FAIL', 'MISSING'], state='readonly', width=20)
-        self.status_combo.grid(row=6, column=1, sticky='w', **pad)
+        self.status_combo.grid(row=5, column=1, sticky='w', **pad)
 
         # details
-        ttk.Label(frm, text='詳細 (details)').grid(row=7, column=0, sticky='ne', **pad)
+        ttk.Label(frm, text='詳細 (details)').grid(row=6, column=0, sticky='ne', **pad)
         self.details_text = tk.Text(frm, height=4, width=50)
-        self.details_text.grid(row=7, column=1, columnspan=2, sticky='we', **pad)
+        self.details_text.grid(row=6, column=1, columnspan=2, sticky='we', **pad)
 
         # 現在時刻を自動送信トグル（JST）
         self.send_now_var = tk.BooleanVar(value=True)
         self.send_now_chk = ttk.Checkbutton(frm, text='現在時刻 (JST) を自動送信', variable=self.send_now_var, command=self._on_send_now_toggle)
-        self.send_now_chk.grid(row=8, column=0, columnspan=3, sticky='w', **pad)
+        self.send_now_chk.grid(row=7, column=0, columnspan=3, sticky='w', **pad)
 
-        # captured_at (任意: 手動入力モード時のみ使用)
-        ttk.Label(frm, text='検査日時 (captured_at, JST ISO 任意)').grid(row=9, column=0, sticky='e', **pad)
+        # captured_at (任意)
+        ttk.Label(frm, text='検査日時 (captured_at, JST ISO 任意)').grid(row=8, column=0, sticky='e', **pad)
         self.captured_var = tk.StringVar()
         self.cap_entry = ttk.Entry(frm, textvariable=self.captured_var, width=40)
-        self.cap_entry.grid(row=9, column=1, sticky='w', **pad)
+        self.cap_entry.grid(row=8, column=1, sticky='w', **pad)
         self.set_now_btn = ttk.Button(frm, text='現在時刻をセット', command=lambda: self.captured_var.set(now_jst_iso()))
-        self.set_now_btn.grid(row=9, column=2, sticky='w', **pad)
+        self.set_now_btn.grid(row=8, column=2, sticky='w', **pad)
 
-        # image (任意)
-        ttk.Label(frm, text='検査後画像 (image, 任意)').grid(row=10, column=0, sticky='e', **pad)
-        self.image_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.image_var, width=50).grid(row=10, column=1, sticky='we', **pad)
-        ttk.Button(frm, text='参照...', command=self._browse_image).grid(row=10, column=2, sticky='w', **pad)
+        # beforeImage
+        ttk.Label(frm, text='検査前画像 (beforeImage 任意)').grid(row=9, column=0, sticky='e', **pad)
+        self.before_var = tk.StringVar()
+        ttk.Entry(frm, textvariable=self.before_var, width=50).grid(row=9, column=1, sticky='we', **pad)
+        ttk.Button(frm, text='参照...', command=self._browse_before).grid(row=9, column=2, sticky='w', **pad)
+
+        # afterImage
+        ttk.Label(frm, text='検査後画像 (afterImage 任意)').grid(row=10, column=0, sticky='e', **pad)
+        self.after_var = tk.StringVar()
+        ttk.Entry(frm, textvariable=self.after_var, width=50).grid(row=10, column=1, sticky='we', **pad)
+        ttk.Button(frm, text='参照...', command=self._browse_after).grid(row=10, column=2, sticky='w', **pad)
 
         # buttons
         btn_frame = ttk.Frame(frm)
@@ -142,41 +164,35 @@ class PutInspectionGUI(tk.Tk):
 
     def _load_initial_values(self):
         cfg = load_config()
-        self.url_var.set(cfg.get('put_base_url', 'http://localhost:3000/api/ingress/inspection/result'))
-        self.filename_var.set(cfg.get('put_filename', ''))
-        self.section_var.set(cfg.get('put_section_label', 'バネ留め (spring)'))
+        loaded_base = _normalize_base_host(cfg.get('post_base_url', 'http://10.100.54.170:3001'))
+        if loaded_base not in self.base_url_choices:
+            self.base_url_choices.append(loaded_base)
+            self.base_url_combo.config(values=self.base_url_choices)
+        self.base_url_var.set(loaded_base)
+        self.lot_var.set(cfg.get('post_lot_id', 'MAT-00123'))
+        self.section_var.set(cfg.get('post_section_label', 'バネ留め (spring)'))
         if self.section_var.get() not in self.section_map:
             self.section_var.set('バネ留め (spring)')
-        self.lot_var.set(cfg.get('lot_id', ''))
         self.camera_var.set(cfg.get('camera_id', 'B-spring01'))
         self.shot_var.set(int(cfg.get('shot_seq', 1)))
         self.status_var.set(cfg.get('status', 'OK'))
         self.details_text.delete('1.0', tk.END)
         self.details_text.insert('1.0', cfg.get('details', ''))
         self.captured_var.set(cfg.get('captured_at', now_jst_iso()))
-        self.send_now_var.set(bool(cfg.get('put_send_now_jst', True)))
+        self.send_now_var.set(bool(cfg.get('post_send_now_jst', True)))
         self._on_send_now_toggle()
-        self.image_var.set(cfg.get('put_image_path', ''))
+        self.before_var.set(cfg.get('post_before_path', ''))
+        self.after_var.set(cfg.get('post_after_path', ''))
 
-    def _browse_image(self):
-        path = filedialog.askopenfilename(title='検査後画像を選択 (任意)', filetypes=[('画像ファイル', '*.jpg;*.jpeg;*.png;*.bmp;*.gif'), ('すべてのファイル', '*.*')])
+    def _browse_before(self):
+        path = filedialog.askopenfilename(title='検査前画像を選択', filetypes=[('画像ファイル', '*.jpg;*.jpeg;*.png;*.bmp;*.gif'), ('すべてのファイル', '*.*')])
         if path:
-            self.image_var.set(path)
+            self.before_var.set(path)
 
-    def _suggest_from_post(self):
-        # POSTの結果をconfigから復元
-        cfg = load_config()
-        # APIの戻りでは public パス (/ImageDB/beforeTest/xxx) が返る想定
-        public_path = cfg.get('post_last_public_path')
-        if public_path:
-            # ファイル名抽出
-            self.filename_var.set(os.path.basename(public_path))
-            self.lot_var.set(cfg.get('post_last_lot_id', ''))
-            self.camera_var.set(cfg.get('camera_id', self.camera_var.get()))
-            self.shot_var.set(int(cfg.get('shot_seq', self.shot_var.get())))
-            messagebox.showinfo('候補をセット', 'POSTの結果から候補値をセットしました。')
-        else:
-            messagebox.showwarning('情報不足', 'POST実行履歴が見つかりません。')
+    def _browse_after(self):
+        path = filedialog.askopenfilename(title='検査後画像を選択', filetypes=[('画像ファイル', '*.jpg;*.jpeg;*.png;*.bmp;*.gif'), ('すべてのファイル', '*.*')])
+        if path:
+            self.after_var.set(path)
 
     def append_log(self, text: str):
         self.log.insert(tk.END, text + '\n')
@@ -189,48 +205,49 @@ class PutInspectionGUI(tk.Tk):
         self.send_btn.config(state=(tk.NORMAL if enabled else tk.DISABLED))
 
     def on_send(self):
-        base = self.url_var.get().strip().rstrip('/')
-        filename = self.filename_var.get().strip()
+        base = _normalize_base_host(self.base_url_var.get().strip()).rstrip('/')
+        lot_id = self.lot_var.get().strip()
         section_label = self.section_var.get()
         section_code = self.section_map.get(section_label)
-        lot_id = self.lot_var.get().strip()
         camera_id = self.camera_var.get().strip()
         shot_seq = int(self.shot_var.get())
         status = self.status_var.get().strip() or 'OK'
         details = self.details_text.get('1.0', tk.END).strip() or None
         captured_at = self.captured_var.get().strip() or None
-        image_path = self.image_var.get().strip()
+        before_path = self.before_var.get().strip()
+        after_path = self.after_var.get().strip()
 
         if not base:
             messagebox.showerror('入力エラー', 'サーバURL(ベース)は必須です。')
             return
-        if not filename:
-            messagebox.showerror('入力エラー', 'filename は必須です。')
+        if not lot_id:
+            messagebox.showerror('入力エラー', 'lot_id は必須です。')
             return
         if not status:
             messagebox.showerror('入力エラー', 'status は必須です。')
             return
 
-        url = f"{base}/{filename}"
+        # 新仕様: バッチ登録エンドポイント
+        url = f"{base}/api/ingress/inspection/batch/{lot_id}"
 
         save_config({
-            'put_base_url': base,
-            'put_filename': filename,
-            'put_section_label': section_label,
-            'lot_id': lot_id,
+            'post_base_url': base,
+            'post_lot_id': lot_id,
+            'post_section_label': section_label,
             'camera_id': camera_id,
             'shot_seq': shot_seq,
             'status': status,
             'details': details or '',
             'captured_at': (captured_at if not self.send_now_var.get() else now_jst_iso()),
-            'put_send_now_jst': bool(self.send_now_var.get()),
-            'put_image_path': image_path,
+            'post_send_now_jst': bool(self.send_now_var.get()),
+            'post_before_path': before_path,
+            'post_after_path': after_path,
         })
-
         self.append_log('[INFO] 送信を開始します...')
         self.set_ui_enabled(False)
 
         def worker():
+            file_handles = []
             try:
                 # captured_at 値をモードに応じて決定（JST）
                 captured_value = now_jst_iso() if self.send_now_var.get() else captured_at
@@ -250,12 +267,21 @@ class PutInspectionGUI(tk.Tk):
                     'metadata': (None, json.dumps(metadata, ensure_ascii=False), 'application/json'),
                 }
 
-                if image_path and os.path.exists(image_path):
-                    mime, _ = mimetypes.guess_type(image_path)
+                if before_path and os.path.exists(before_path):
+                    mime, _ = mimetypes.guess_type(before_path)
                     mime = mime or 'application/octet-stream'
-                    files['image'] = (filename, open(image_path, 'rb'), mime)
+                    fh = open(before_path, 'rb')
+                    file_handles.append(fh)
+                    files['beforeImage'] = (os.path.basename(before_path), fh, mime)
 
-                resp = requests.put(url, files=files, timeout=60)
+                if after_path and os.path.exists(after_path):
+                    mime, _ = mimetypes.guess_type(after_path)
+                    mime = mime or 'application/octet-stream'
+                    fh = open(after_path, 'rb')
+                    file_handles.append(fh)
+                    files['afterImage'] = (os.path.basename(after_path), fh, mime)
+
+                resp = requests.post(url, files=files, timeout=60)
 
                 try:
                     body = resp.json()
@@ -266,6 +292,11 @@ class PutInspectionGUI(tk.Tk):
             except Exception as e:
                 self.after(0, lambda: self.append_log(f'[ERROR] {repr(e)}'))
             finally:
+                for fh in file_handles:
+                    try:
+                        fh.close()
+                    except Exception:
+                        pass
                 self.after(0, lambda: self.set_ui_enabled(True))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -276,17 +307,17 @@ class PutInspectionGUI(tk.Tk):
         except Exception:
             shot_seq = 1
         save_config({
-            'put_base_url': self.url_var.get().strip(),
-            'put_filename': self.filename_var.get().strip(),
-            'put_section_label': self.section_var.get(),
-            'lot_id': self.lot_var.get().strip(),
+            'post_base_url': _normalize_base_host(self.base_url_var.get().strip()),
+            'post_lot_id': self.lot_var.get().strip(),
+            'post_section_label': self.section_var.get(),
             'camera_id': self.camera_var.get().strip(),
             'shot_seq': shot_seq,
             'status': self.status_var.get().strip() or 'OK',
             'details': self.details_text.get('1.0', tk.END).strip(),
             'captured_at': (self.captured_var.get().strip() if not self.send_now_var.get() else now_jst_iso()),
-            'put_send_now_jst': bool(self.send_now_var.get()),
-            'put_image_path': self.image_var.get().strip(),
+            'post_send_now_jst': bool(self.send_now_var.get()),
+            'post_before_path': self.before_var.get().strip(),
+            'post_after_path': self.after_var.get().strip(),
         })
         self.destroy()
 
@@ -298,5 +329,5 @@ class PutInspectionGUI(tk.Tk):
 
 
 if __name__ == '__main__':
-    app = PutInspectionGUI()
+    app = PostInspectionBulkGUI()
     app.mainloop()

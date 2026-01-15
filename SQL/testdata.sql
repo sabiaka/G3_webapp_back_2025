@@ -159,7 +159,8 @@ INSERT INTO machine_logs (machine_name, unit_id, timestamp, log_type, title, mes
 ('半自動表層バネどめ機', NULL, '2025-07-17 08:00:00', 'info',    'I-001: 生産機械 通電（JETSON検知）', '');
 
 
-
+INSERT INTO machine_logs (machine_name, unit_id, timestamp, log_type, title, message) VALUES
+('半自動表層バネどめ機', 1, '2025-11-13 10:08:00', 'info', 'I-000: テスト中', 'テスト中');
 
 -- inspection_results (検査画像) テーブルへの仮データ挿入
 --INSERT INTO inspection_results (
@@ -320,3 +321,8 @@ INSERT INTO inspection_camera_shots (lot_id_ref, camera_id, status, details, ima
 (8, 'A-main01', 'FAIL', 'ゴミ付着', 'LOLL-10003_A-main01.jpg', 1, '2025-10-01 17:51:05.321+00'),
 (8, 'A-stitch01', 'PASS', NULL, 'LOLL-10003_A-stitch01.jpg', 1, '2025-10-01 17:51:05.321+00'),
 (8, 'A-stitch02', 'FAIL', '糸ほつれ', 'LOLL-10003_A-stitch02.jpg', 1, '2025-10-01 17:51:05.321+00');
+
+
+-- 今日のおしらせ
+INSERT INTO today_message (message_id, content, priority)
+VALUES (1, '後歩きから対空昇竜、大体波動に化ける...', 1);

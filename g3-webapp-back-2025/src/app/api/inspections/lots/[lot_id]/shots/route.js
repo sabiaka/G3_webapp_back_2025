@@ -20,7 +20,17 @@ export async function GET(request, { params }) {
       );
     }
 
-    // 2. データベースから該当するショットの一覧を取得
+    // 2. 代表時刻（ロットのcaptured_at）を取得
+    const lotCapturedAtQuery = `
+      SELECT captured_at
+      FROM inspection_lots
+      WHERE lot_id = $1
+      LIMIT 1;
+    `;
+    const lotCapturedAtResult = await pool.query(lotCapturedAtQuery, [lot_id]);
+    const lotCapturedAt = lotCapturedAtResult.rows[0]?.captured_at ?? null;
+
+    // 3. データベースから該当するショットの一覧を取得
     const shotsQuery = `
       SELECT
           s.camera_id,
@@ -39,9 +49,11 @@ export async function GET(request, { params }) {
 
     const shotsResult = await pool.query(shotsQuery, [lot_id]);
 
-    // 3. 仕様書通りのフォーマットでレスポンスを組み立てる
+    // 4. 仕様書通りのフォーマットでレスポンスを組み立てる
     const responseData = {
       lot_id: lot_id,
+      // ロットの代表時刻（最初/最後のいずれか）
+      captured_at: lotCapturedAt,
       shots: shotsResult.rows,
     };
     
