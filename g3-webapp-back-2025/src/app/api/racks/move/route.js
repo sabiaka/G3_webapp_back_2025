@@ -8,6 +8,13 @@ import db from '@/lib/db'; // データベース接続
  */
 export async function POST(request) {
   try {
+    /**
+     * ファイル概要
+     * ==========
+     * このファイルは 部品のスロット間移動 を行うAPIを提供します。
+     * 移動先が存在しない場合は新規作成、存在するが空でない場合は409を返して安全に運用します。
+     * 処理はトランザクションで一括整合性を担保します。
+     */
     const {
       from_rack_id,
       from_slot_identifier,
@@ -15,6 +22,25 @@ export async function POST(request) {
       to_slot_identifier
     } = await request.json();
 
+    /**
+     * リクエストボディ（JSON）
+     * - from_rack_id        : 数値または文字列
+     * - from_slot_identifier: 文字列
+     * - to_rack_id          : 数値または文字列
+     * - to_slot_identifier  : 文字列
+     *
+     * 成功時の戻り値（200）
+     * - message : 文字列。移動完了メッセージ。
+     *
+     * エラー
+     * - 400 入力不正・同一指定      : 必須項目不足、または移動元と移動先が同一。
+     * - 404 未存在                  : 移動元ラック/スロットが存在しない等。
+     * - 409 競合                    : 移動先に既に部品がある。
+     * - 500 サーバーエラー          : DB/トランザクションエラー等。
+     *
+     * 実装方針の要点
+     * - トランザクションで取得→検証→移動先更新/挿入→移動元削除を一括実行。
+     */
     // 必須項目のバリデーション
     if (!from_rack_id || !from_slot_identifier || !to_rack_id || !to_slot_identifier) {
       return NextResponse.json({ message: '必須項目が不足しています。' }, { status: 400 });

@@ -1,3 +1,13 @@
+/**
+ * ファイルの役割:
+ *   【検査前 初期登録(複数ショット一括)】のエンドポイントを提供するAPIルート。
+ *   multipart/form-dataからmetadataと複数画像を受け取り、ロットID採番→ロット登録→ショット登録→画像保存を行う。
+ *
+ * 実装ポリシー:
+ *   - 入力は必須項目を厳密に検証する(日本語メッセージで400返却)。
+ *   - DB操作とファイル保存の整合性を保つため、トランザクションを使用。
+ *   - ファイル名のみをDBに保持し、実ファイルは所定のストレージパスへ保存。
+ */
 import { NextResponse } from 'next/server';
 import { writeFile } from 'fs/promises';
 import path from 'path';
@@ -26,9 +36,27 @@ async function generateNewLotId(prefix) {
 /**
  * 6. 【初期登録】API (★複数ショット一括登録バージョン)
  * (画像パスはファイル名のみ保存)
+ *
+ * 説明:
+ *   section_codeに応じてロットIDを採番し、`shots` 配列の各要素について検査前画像とショット情報を登録する。
+ *   画像はストレージに保存し、DBにはファイル名のみ保存する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - multipart/form-data を受け取るリクエスト
+ *   @returns {NextResponse}                                     - JSON: { message, lot_id, filenames }
+ *
+ * リクエスト(form-data):
+ *   metadata                                                    - JSON文字列。{ section_code: 'spring'|'alayer', shots: Array<{camera_id, shot_seq?, captured_at?}> }
+ *   各camera_id                                                 - 各ショットに対応する画像ファイル(Binary)。キーはcamera_idと一致。
+ *
+ * ステータス:
+ *   201                                                         - 作成成功
+ *   400                                                         - 入力エラー
+ *   500                                                         - サーバ内部エラー(ロールバック)
  */
 export async function POST(request) {
   try {
+    // ======== form-data取得: metadata(必須)と画像バイナリ群を得る ========
     const formData = await request.formData();
     const metadataString = formData.get('metadata');
 
@@ -48,6 +76,7 @@ export async function POST(request) {
       );
     }
 
+    // ======== トランザクション開始: DB整合性の担保 ========
     await db.query('BEGIN');
 
     // --- 3. lot_id の採番 (変更なし) ---
@@ -62,6 +91,7 @@ export async function POST(request) {
     const newLotId = await generateNewLotId(lotIdPrefix);
 
     // --- 4. inspection_lots (ロット) をDBに登録 ---
+    // なぜ: ロットIDを親としてショットをぶら下げる構造のため、先に親を確定する
     // ★ ロットの代表時刻として、1番目のショットの時刻を使用
     const lotCapturedAt = shots[0]?.captured_at || new Date().toISOString();
     
@@ -90,6 +120,7 @@ export async function POST(request) {
       const imageFile = formData.get(camera_id);
 
       if (imageFile) {
+        // ======== ファイル名生成と保存: パス解決→書き込み ========
         // 6-1. ファイル名生成
         const extension = path.extname(imageFile.name) || '.jpg';
         const newFilename = `${newLotId}_${camera_id}_${shot_seq}${extension}`;
@@ -109,6 +140,7 @@ export async function POST(request) {
       }
 
       // 6-3. inspection_camera_shots (ショット) をDBに登録
+      // なぜ: 初期状態を 'MISSING' とし、後工程で結果/後画像が登録される前提
       await db.query(insertShotQuery, [
         lotDbId, // ★ 共通のロットID
         camera_id,
@@ -120,6 +152,7 @@ export async function POST(request) {
       ]);
     }
 
+    // ======== コミット: ここまでのDB操作を確定 ========
     await db.query('COMMIT');
 
     emitEvent({
@@ -140,7 +173,7 @@ export async function POST(request) {
     );
 
   } catch (error) {
-    await db.query('ROLLBACK');
+    await db.query('ROLLBACK'); // エラー時は整合性のために必ずロールバック
     console.error('[API ERROR] /api/ingress/inspection:', error);
     return NextResponse.json({ "error": "Internal Server Error", "details": error.message }, { status: 500 });
   }

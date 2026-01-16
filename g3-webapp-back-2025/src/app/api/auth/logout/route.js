@@ -1,3 +1,9 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは ログアウトAPI を提供します。ステートレスJWT運用前提のため、
+ * サーバー側のセッションは持たず、必要であればCookieのトークンを即時無効化します。
+ */
 import { NextResponse } from 'next/server';
 
 /*
@@ -7,6 +13,17 @@ import { NextResponse } from 'next/server';
  * 追加: 将来トークンをCookie(HttpOnly)で運用する場合に備えて
  *       空のCookieを即時失効させる Set-Cookie を返す実装を入れておく。
  * 備考: フロントで localStorage などに保存している場合はそちらも必ず削除すること。
+ */
+/**
+ * POST /api/auth/logout
+ * --------------------------------------
+ * ログアウト処理。サーバーセッションなしのため、Cookie運用時のみSet-Cookieで無効化を返します。
+ *
+ * 成功時の戻り値（200）
+ * - { message: "Successfully logged out" }
+ *
+ * エラー
+ * - なし（ステートレス運用前提）
  */
 export async function POST() {
 	// 共通Cookie名 (必要に応じて統一): access_token

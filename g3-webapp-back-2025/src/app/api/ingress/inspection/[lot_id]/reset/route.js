@@ -1,3 +1,8 @@
+/**
+ * ファイルの役割:
+ *   【検査リセット】(再検査初期化)のAPIルート。
+ *   検査後の状態と後画像をクリアし、ショットを初期状態 'MISSING' に戻す。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeAfterImagePath, removeImage } from '@/lib/image-storage';
@@ -6,6 +11,20 @@ import { emitEvent } from '@/lib/event-bus';
 /**
  * API: 12. 検査ステータスのリセット (再検査の初期化)
  * (POST /api/ingress/inspection/{lot_id}/reset)
+ *
+ * 説明:
+ *   指定ロットに紐づくショットから、検査後画像(only AFTER)を削除し、ステータス/詳細を初期化する。
+ *   DBのimage_pathはbeforeのパス前提のため、それを元にAFTERを導出して削除する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @param {{ params: { lot_id: string } }} params             - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: リセット件数等
+ *
+ * ステータス:
+ *   200                                                         - リセット成功
+ *   404                                                         - ロット未発見
+ *   500                                                         - 画像削除/DB更新での内部エラー
  */
 export async function POST(request, { params }) {
   const client = await pool.connect();
@@ -54,6 +73,7 @@ export async function POST(request, { params }) {
     const updatedCount = updateResult.rowCount;
 
     // 5. 物理ファイル削除 (検査後画像のみ)
+    // なぜ: before は入力ソースのため残し、after のみ再検査に備えて削除する
     for (const dbPath of pathsToReset) {
       let afterImageUrl;
       try {

@@ -1,8 +1,39 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 指定機械の点検間隔（日） を更新するAPIを提供します。
+ * 間隔は1〜3650日（約10年）を許容し、最新ステータス行が存在しない場合は新規作成にも対応します。
+ */
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
 // 点検間隔の変更 API
 // PUT /api/machines/{id}/inspection-interval
+/**
+ * PUT /api/machines/{id}/inspection-interval
+ * --------------------------------------
+ * 指定機械の点検間隔（inspection_interval_days）を更新し、次回点検日を返します。
+ *
+ * 引数（Path Params）
+ * - id                  : 数値の machine_id または文字列の machine_name
+ *
+ * リクエストボディ（JSON）
+ * - interval_days       : 整数（1〜3650）。点検間隔（日）。
+ *
+ * 成功時の戻り値（200）
+ * - machine_id               : 数値。対象機械ID。
+ * - inspection_interval_days : 数値。更新後の点検間隔（日）。
+ * - next_inspection_date     : 文字列。次回点検日（YYYY-MM-DD）。
+ *
+ * エラー
+ * - 400 Invalid interval_days provided : 入力が不正。
+ * - 404 Machine not found              : 機械未存在。
+ * - 500 Internal Server Error         : 予期せぬエラー。
+ *
+ * 実装方針の要点
+ * - information_schema を用いて旧スキーマ(status列あり)と新スキーマを判別し、初回作成を分岐。
+ * - 次回点検日は COALESCE(machine_last_inspection, CURRENT_DATE) + interval_days で算出。
+ */
 export async function PUT(request, ctx) {
     const { id } = await ctx.params; // Next.js 15: params は非同期
 

@@ -1,3 +1,9 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 特定IDのロール更新・削除 を行うAPIを提供します。
+ * 更新は差分更新（指定項目のみ）に対応し、削除はFK制約違反を409で返します。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
@@ -7,6 +13,19 @@ import db from '@/lib/db';
  * @param {object} context - URLパラメータを含むオブジェクト
  * @param {object} context.params - URLパラメータ
  * @param {string} context.params.id - 更新対象のrole_id
+ *
+ * リクエストボディ（JSON）
+ * - role_name : 文字列（任意）
+ * - is_admin  : boolean（任意）
+ *
+ * 成功時の戻り値（200）
+ * - 更新後のロール1件
+ *
+ * エラー
+ * - 400 入力不足/型不正/ID不正 : 更新対象なし、is_adminがbooleanでない、ID不正。
+ * - 404 対象なし               : 指定IDが存在しない。
+ * - 409 重複                  : role_name一意制約違反（23505）。
+ * - 500 サーバーエラー        : DBアクセス等で異常。
  */
 export async function PUT(request, { params }) {
   try {
@@ -77,6 +96,15 @@ export async function PUT(request, { params }) {
  * @param {object} context - URLパラメータを含むオブジェクト
  * @param {object} context.params - URLパラメータ
  * @param {string} context.params.id - 削除対象のrole_id
+ *
+ * 成功時の戻り値（204）
+ * - 本文なし。
+ *
+ * エラー
+ * - 400 IDが不正。
+ * - 404 対象なし。
+ * - 409 FK制約違反             : 従業員に割り当て済で削除不可（23503）。
+ * - 500 サーバーエラー         : DBアクセス等で異常。
  */
 export async function DELETE(request, { params }) {
   try {

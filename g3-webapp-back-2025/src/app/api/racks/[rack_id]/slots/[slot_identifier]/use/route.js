@@ -1,6 +1,37 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 指定スロットの在庫から指定数を使用（減算） するAPIを提供します。
+ * 在庫が0以下になればスロットを空（NULL化）にし、整合性維持のためトランザクションで処理します。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // データベース接続
 
+/**
+ * POST /api/racks/{rack_id}/slots/{slot_identifier}/use
+ * --------------------------------------
+ * 指定スロットから指定個数の部品を使用します。在庫不足や未格納はエラーとして返します。
+ *
+ * 引数（Path Params）
+ * - rack_id         : 数値または文字列（DB側FKで検証）
+ * - slot_identifier : 文字列（例: "A-1"）
+ *
+ * リクエストボディ（JSON）
+ * - quantity_to_use : 数値（>0）必須。
+ *
+ * 成功時の戻り値（200）
+ * - message            : 使用完了メッセージ。
+ * - remaining_quantity : 残数（0のときはスロットを空に）。
+ *
+ * エラー
+ * - 400 入力不正                : quantity_to_use の不足/不正。
+ * - 404 未格納/棚・スロット未存在 : 現在在庫が無い、または参照不可。
+ * - 409 在庫不足                : 現在在庫が不足。
+ * - 500 サーバーエラー          : DB/トランザクションエラー等。
+ *
+ * 実装方針の要点
+ * - BEGIN/COMMIT/ROLLBACK でトランザクション制御。残量0以下はスロット情報をNULL化。
+ */
 export async function POST(request, ctx) {
   const { rack_id, slot_identifier } = await ctx.params;
   // clientの取得は不要

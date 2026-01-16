@@ -1,8 +1,24 @@
+/**
+ * ファイルの役割:
+ *   生産ラインの一覧取得と新規登録を提供するAPIルート。
+ *   一覧はID昇順、登録はline_nameの一意制約に従う。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // データベース接続設定をインポート
 
 /**
  * 生産ラインの一覧を取得するAPI (GET)
+ *
+ * 説明:
+ *   production_lines から line_id, line_name を取得し、ID昇順で返却する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @returns {NextResponse}                                     - JSON: Array<{ line_id, line_name }>
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request) {
   try {
@@ -26,6 +42,23 @@ export async function GET(request) {
 
 /**
  * 新しい生産ラインを登録するAPI (POST)
+ *
+ * 説明:
+ *   line_name を受け取り、production_lines に挿入する。
+ *   一意制約違反時は409を返す。
+ *
+ * I/O:
+ *   @param {Request} request                                   - JSONボディを含むリクエスト
+ *   @returns {NextResponse}                                     - JSON: 登録されたライン
+ *
+ * 受信ボディ(JSON):
+ *   line_name                                                   - ライン名(必須)
+ *
+ * ステータス:
+ *   201                                                         - 作成成功
+ *   400                                                         - 入力エラー
+ *   409                                                         - 一意制約違反
+ *   500                                                         - サーバ内部エラー
  */
 export async function POST(request) {
   try {

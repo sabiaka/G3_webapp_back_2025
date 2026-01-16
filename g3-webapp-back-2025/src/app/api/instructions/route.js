@@ -1,13 +1,44 @@
+/**
+ * ファイルの役割:
+ *   製造指示の一覧取得と新規登録を提供するAPIルート。
+ *   フリーワード・ライン名・完了状態・日付(単日/範囲)での検索に対応し、最新順で返却する。
+ *
+ * 実装ポリシー:
+ *   - 入力検証は日本語メッセージで400系を返す。
+ *   - SQLは必ずパラメータバインドを使用して安全性を確保。
+ *   - タイムゾーンはサーバ側(JST前提)で ::date により日単位抽出を行う。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
 /**
  * 製造指示リストを取得するAPI (GET)
  * @description GET /api/instructions
- * @param request - q, line, is_completed, date(当日一致), start_date/end_date(範囲) による絞り込み検索に対応
+ *
+ * 説明:
+ *   フリーワード(q), ライン名(line), 完了状態(is_completed), 単日(date) または 範囲(start_date/end_date) で検索できる。
+ *   date が指定された場合はそれを優先し、なければ start/end の範囲条件を適用する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - クエリ付きリクエスト
+ *   @returns {NextResponse}                                     - JSON: 製造指示配列
+ *
+ * クエリ:
+ *   q                                                           - フリーワード(名称/付属品/宛先/備考を部分一致)
+ *   line                                                        - ライン名(部分一致)
+ *   is_completed                                                - 'true'|'false'
+ *   date                                                        - 'YYYY-MM-DD' (単日一致)
+ *   start_date                                                  - 'YYYY-MM-DD' (以降)
+ *   end_date                                                    - 'YYYY-MM-DD' (以前)
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   400                                                         - 入力エラー
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request) {
   try {
+    // ======== クエリ取得: 条件を個別に取り出す ========
     const searchParams = request.nextUrl.searchParams;
     const q = searchParams.get('q');
     const line = searchParams.get('line');
@@ -17,6 +48,7 @@ export async function GET(request) {
   const end_date = searchParams.get('end_date');     // 作成日（以前）
 
     // ベースとなるクエリ
+    // なぜ: 表示に必要な列を別名で整形し、JOINでライン名を取得するため
     let query = `
       SELECT
         n.notification_id AS id,
@@ -55,6 +87,7 @@ export async function GET(request) {
     }
 
     // ?line=... (担当ラインでの絞り込み) - 部分一致に変更
+    // なぜ: ユーザーが厳密一致を知らなくても曖昧検索できるようにするため
     if (line) {
       whereClauses.push(`pl.line_name ILIKE $${paramIndex}`);
       queryParams.push(`%${line}%`);
@@ -72,6 +105,7 @@ export async function GET(request) {
           { status: 400 }
         );
       }
+      // なぜ: ::date でサーバ側タイムゾーンに正規化し、日単位で一致させるため
       whereClauses.push(`n.notification_data_time::date = $${paramIndex}`);
       queryParams.push(date);
       paramIndex++;
@@ -84,6 +118,7 @@ export async function GET(request) {
             { status: 400 }
           );
         }
+        // なぜ: 範囲検索でも日単位扱いとするため ::date を使用
         whereClauses.push(`n.notification_data_time::date >= $${paramIndex}`);
         queryParams.push(start_date);
         paramIndex++;
@@ -96,6 +131,7 @@ export async function GET(request) {
             { status: 400 }
           );
         }
+        // なぜ: 範囲検索でも日単位扱いとするため ::date を使用
         whereClauses.push(`n.notification_data_time::date <= $${paramIndex}`);
         queryParams.push(end_date);
         paramIndex++;
@@ -134,9 +170,31 @@ export async function GET(request) {
 
 /**
  * 新しい製造指示を登録するAPI (POST)
+ *
+ * 説明:
+ *   ライン名からline_idを解決し、任意の作成日時を許容して挿入する。
+ *   作成後はJOINで整形した1件を返す。
+ *
+ * I/O:
+ *   @param {Request} request                                   - JSONボディを含むリクエスト
+ *   @returns {NextResponse}                                     - JSON: 登録レコード
+ *
+ * 受信ボディ(JSON):
+ *   line                                                        - ライン名(必須)
+ *   product_name                                                - 品名(必須)
+ *   size                                                        - 規格(任意)
+ *   quantity                                                    - 数量(必須)
+ *   remarks                                                     - 備考(任意)
+ *   created_at|notification_data_time                           - 任意の作成日時(ISO8601|YYYY-MM-DD)
+ *
+ * ステータス:
+ *   201                                                         - 作成成功
+ *   400                                                         - 入力エラー
+ *   500                                                         - サーバ内部エラー
  */
 export async function POST(request) {
   try {
+    // ======== 入力取得 ========
     const body = await request.json();
     
     // 画像の仕様に合わせてリクエストボディからデータを取得
@@ -160,6 +218,7 @@ export async function POST(request) {
     }
 
     // 1. 受け取ったライン名から line_id を検索
+    // なぜ: APIではline名で受け取り、DBはIDで管理しているため
     const lineResult = await db.query(
       'SELECT line_id FROM production_lines WHERE line_name = $1',
       [line]
@@ -245,6 +304,7 @@ export async function POST(request) {
     const newInstructionId = result.rows[0].notification_id;
 
     // 成功レスポンス用に、作成されたデータを整形して取得し直す
+    // なぜ: 返却形式を一覧と同一にしてクライアント側の取り回しを統一するため
     const selectQuery = `
       SELECT
         n.notification_id AS id,

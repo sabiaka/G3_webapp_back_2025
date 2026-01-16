@@ -1,8 +1,24 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 権限（ロール）の一覧取得 と 新規登録 を行うAPIを提供します。
+ * 役割名の重複は一意制約で409を返し、レスポンスは既存仕様に準拠します。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // データベース接続設定をインポート
 
 /**
  * 権限（ロール）一覧を取得するAPI (GET)
+ * --------------------------------------
+ * 全ロールを role_id の昇順で返します。
+ *
+ * 成功時の戻り値（200）
+ * - role_id  : 数値
+ * - role_name: 文字列
+ * - is_admin : boolean
+ *
+ * エラー
+ * - 500 サーバーエラー：DBアクセス等で異常が発生した場合。
  */
 export async function GET(request) {
   try {
@@ -27,6 +43,20 @@ export async function GET(request) {
 
 /**
  * 新しい権限（ロール）を登録するAPI (POST)
+ * --------------------------------------
+ * 指定の role_name と is_admin でロールを作成します。
+ *
+ * リクエストボディ（JSON）
+ * - role_name : 文字列（必須）
+ * - is_admin  : boolean（必須）
+ *
+ * 成功時の戻り値（201）
+ * - INSERT結果の行全体
+ *
+ * エラー
+ * - 400 入力不足/型不正       : role_name未指定、is_adminがbooleanでない。
+ * - 409 重複                  : role_nameの一意制約違反（23505）。
+ * - 500 サーバーエラー        : DBアクセス等で異常。
  */
 export async function POST(request) {
   try {

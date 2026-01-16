@@ -1,9 +1,26 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 特定IDの日報の取得・更新・削除 を行うAPIを提供します。
+ * 取得はJOINで従業員名・ライン名も返し、更新/削除は標準的なバリデーションとエラーハンドリングに従います。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // 既存のDB接続をインポート
 
 /**
  * 1. 特定の日報取得 (GET /api/reports/{id})
  * @description 従業員APIのGET(一覧)のSELECTクエリを参考に、単一IDで取得
+ *
+ * 引数（Path Params）
+ * - id : 数値（必須）
+ *
+ * 成功時の戻り値（200）
+ * - { report_id, employee_id, employee_name, line_id, line_name, report_date, notes, updated_at }
+ *
+ * エラー
+ * - 400 IDが無効です。
+ * - 404 日報が見つかりません。
+ * - 500 サーバーエラー。
  */
 export async function GET(request, context) {
   const { id } = await context.params;
@@ -61,6 +78,21 @@ export async function GET(request, context) {
 /**
  * 2. 特定の日報を更新するAPI (PUT /api/reports/{id})
  * @description 従業員APIのPOSTのロジックを参考にUPDATEを実装
+ *
+ * リクエストボディ（JSON）
+ * - employee_id : 数値（必須）
+ * - line_id     : 数値（必須）
+ * - report_date : 文字列 'YYYY-MM-DD'（必須）
+ * - notes       : 文字列 | null
+ *
+ * 成功時の戻り値（200）
+ * - report_id, employee_id, line_id, report_date, notes, created_at, updated_at
+ *
+ * エラー
+ * - 400 入力不足/ID無効          : 必須項目不足やID不正。
+ * - 400 FK制約違反               : 指定従業員/ラインが存在しない（23503）。
+ * - 404 更新対象なし             : 対象IDが存在しない。
+ * - 500 サーバーエラー           : DBアクセス等で異常。
  */
 export async function PUT(request, context) {
   const { id } = await context.params;
@@ -154,6 +186,14 @@ export async function PUT(request, context) {
 /**
  * 3. 特定の日報を削除するAPI (DELETE /api/reports/{id})
  * @description 従業員APIにないため、標準的なDELETE処理を実装
+ *
+ * 成功時の戻り値（204）
+ * - 本文なし。
+ *
+ * エラー
+ * - 400 IDが無効です。
+ * - 404 削除対象が見つからない。
+ * - 500 サーバーエラー。
  */
 export async function DELETE(request, context) {
   const { id } = await context.params;

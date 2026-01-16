@@ -1,6 +1,47 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 単一機械の集計情報 を返すAPIハンドラを提供します。
+ * 指定された機械（数値IDまたは機械名）について、最新ステータスを基に以下を返します。
+ * - 当日の稼働秒数（JSTの当日0:00〜現在までを切り出し）
+ * - 当日の生産数
+ * - 稼働開始時刻（JST時刻をISO風文字列で返却）
+ * - 最終点検日と次回点検日（点検間隔がある場合は計算）
+ *
+ * ここでは生SQLを用い、必ずパラメータ化（$1, $2, ...）を行っています。
+ * タイムゾーンはJST（Asia/Tokyo）基準で集計します。
+ */
 import { NextResponse } from "next/server";
 import db from "@/lib/db"; // DB接続
 
+/**
+ * GET /api/machines/{id}
+ * --------------------------------------
+ * 機械の最新状態と当日集計を返します。idは数値IDまたは機械名のいずれも指定可能です。
+ *
+ * 引数（Path Params）
+ * - id               : 数値の machine_id または文字列の machine_name
+ *
+ * 成功時の戻り値（200）
+ * - machine_id               : 数値。対象機械ID。
+ * - machine_name             : 文字列。機械名。
+ * - started_at               : 文字列。JST基準での稼働開始時刻（"YYYY-MM-DDTHH:mm:SSZ" 形式互換）。
+ * - today_uptime_seconds     : 数値。当日の稼働秒数（JST当日0:00以降を切り出し）。
+ * - today_uptime_hms         : 文字列。稼働秒数のHH:MM:SS表示。
+ * - today_production_count   : 数値。当日の生産数。
+ * - last_inspection_date     : 文字列またはnull。最終点検日（YYYY-MM-DD）。
+ * - next_inspection_date     : 文字列またはnull。次回点検日（YYYY-MM-DD）。
+ * - inspection_interval_days : 数値またはnull。点検間隔（日）。
+ *
+ * エラー
+ * - 404 Machine not found     : 指定の機械が存在しない場合。
+ * - 500 Internal Server Error : 予期せぬエラー。
+ *
+ * 実装方針の要点
+ * - idが数値ならmachine_id、文字列ならmachine_nameで特定。
+ * - CTEで「最新行」「当日稼働秒数」「点検日」算出を段階的に分離し、読みやすさと保守性を確保。
+ * - JSTの当日切り出しは date_trunc('day', now() AT TIME ZONE 'Asia/Tokyo') を基準に実施。
+ */
 export async function GET(request, ctx) {
   // Next.js 15+: params は Promise
   const { id } = await ctx.params;
