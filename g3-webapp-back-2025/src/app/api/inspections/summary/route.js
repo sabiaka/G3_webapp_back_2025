@@ -1,10 +1,30 @@
+/**
+ * ファイルの役割:
+ *   セクション×日付の検査サマリー(件数/合格率/不良理由内訳)を返すAPI。
+ *   日付未指定時はそのセクションでデータが存在する最新日付を自動選択する。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
- * 指定したセクションと日付の検査サマリーを取得するAPI
- * * 日付指定がない場合：そのセクションでデータが存在する「最新の日付」を自動選択
- * 日付指定がある場合：指定された日付（YYYY-MM-DD）を使用
+ * 指定したセクションと日付の検査サマリーを取得するAPI (GET)
+ *
+ * 説明:
+ *   sectionで絞り、ロット代表時刻に基づいて指定日付のショットを集計。
+ *   FAIL理由の内訳をdetailsでグルーピングして返却する。
+ *
+ * I/O:
+ *   @param {Request} request                                   - クエリを含むリクエスト
+ *   @returns {NextResponse}                                     - JSON: { section, date, total_count, pass_count, fail_count, pass_rate, fail_reasons }
+ *
+ * クエリ:
+ *   section                                                     - セクションコード(必須)
+ *   date                                                        - 'YYYY-MM-DD'(任意)
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   400                                                         - 入力エラー
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request) {
   try {

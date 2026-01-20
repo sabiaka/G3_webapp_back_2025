@@ -1,3 +1,9 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは ユーザー登録API を提供します。生SQL + db.query で既存名からID解決に対応し、
+ * bcryptでパスワードをハッシュ化して登録します。カラーコードは6桁HEXに統一します。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import bcrypt from 'bcrypt';
@@ -10,16 +16,32 @@ export async function GET() {
     );
 }
 
-/*
+/**
  * POST /api/auth/register
- * 入力必須: employee_user_id, password, employee_name
- * 任意    : employee_role_name (デフォルト: '一般'), employee_line_name (デフォルト: '未設定')
- * 処理概要:
- *  1. 入力バリデーション
- *  2. ユーザーID重複チェック (SELECT)
- *  3. パスワードハッシュ化 (bcrypt)
- *  4. INSERT (db.query)  ※他APIと同じSQLスタイルに統一
- *  5. 最小限の情報を返却（パスワードは含めない）
+ * --------------------------------------
+ * 新規ユーザーを登録します。ロール/ラインはID優先、名称指定時は既存名からID解決します。
+ *
+ * リクエストボディ（JSON）
+ * - employee_user_id : 文字列（必須）
+ * - password         : 文字列（必須）
+ * - employee_name    : 文字列（必須）
+ * - employee_role_id / employee_role_name : 数値 or 文字列（いずれかで指定）
+ * - employee_line_id / employee_line_name : 数値 or 文字列（いずれかで指定）
+ * - employee_special_notes / special_notes : 文字列 | null
+ * - employee_color_code / color_code       : 文字列 | null（#付き/無し両対応、6桁HEX）
+ *
+ * 成功時の戻り値（201）
+ * - message: 'ユーザー登録成功'
+ * - user   : INSERT後の行（passwordは含まない）
+ *
+ * エラー
+ * - 400 入力不足/ID解決失敗/ID未存在 : 必須項目不足、名称で解決できない、指定ID未存在。
+ * - 409 既存ユーザーID               : 重複（23505）。
+ * - 500 サーバーエラー               : DB/ハッシュ化失敗等。
+ *
+ * 実装方針の要点
+ * - まず名称からIDを解決（roles, production_lines）。未解決なら400。
+ * - bcryptでハッシュ化したパスワードを保存。カラーコードは6桁HEXの大文字に正規化。
  */
 export async function POST(request) {
     try {

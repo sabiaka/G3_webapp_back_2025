@@ -1,8 +1,43 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 機械ログのページング取得 API を提供します。
+ * 画面の日付/種別/ユニットIDで絞り込み、JST日付ベースでの抽出とします。
+ */
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
 const ALLOWED_TYPES = ["error", "warning", "info"];
 
+/**
+ * GET /api/machines/{id}/logs
+ * --------------------------------------
+ * 指定機械のログをページングで返却します。idは数値IDまたは機械名のいずれも可。
+ *
+ * 引数（Path Params）
+ * - id            : 数値の machine_id または文字列の machine_name
+ *
+ * 引数（Query Params）
+ * - date          : 文字列 'YYYY-MM-DD'。JST日付で一致抽出。
+ * - type          : 'error' | 'warning' | 'info'。
+ * - unit_id       : 数値。ユニットID。
+ * - page          : 数値（>=1）。省略時 1。
+ * - limit         : 数値（>=1）。省略時 20。
+ *
+ * 成功時の戻り値（200）
+ * - total_pages   : 数値。総ページ数。
+ * - current_page  : 数値。現在ページ。
+ * - logs          : 配列。{ log_id, unit_id, timestamp, log_type, title, message } の配列。
+ *
+ * エラー
+ * - 400 入力不正                 : typeが不正、またはunit_idが数値でない。
+ * - 500 Internal Server Error   : 予期せぬエラー。
+ *
+ * 実装方針の要点
+ * - idが数値かどうかでmachinesテーブルJOINの有無を切替（名前指定にも対応）。
+ * - JST基準の日付抽出は (timestamp AT TIME ZONE 'Asia/Tokyo')::date を使用。
+ * - LIMIT/OFFSETもプレースホルダ化し、SQLインジェクションを防止。
+ */
 export async function GET(request, ctx) {
   const { id } = await ctx.params; // Next.js 15: params は非同期
   const { searchParams } = new URL(request.url);

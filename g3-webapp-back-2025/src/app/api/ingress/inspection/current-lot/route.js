@@ -1,9 +1,27 @@
+/**
+ * ファイルの役割:
+ *   指定セクションの最新ロットIDを返すAPIルート。
+ *   captured_atで降順に並べて先頭1件を返す。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // 修正済みのDB接続プール
 
 /**
  * API: 11. 現在生産中の lot_id を取得
  * (GET /api/ingress/inspection/current-lot?section={section})
+ *
+ * 説明:
+ *   section_codeでフィルタし、最新のロットIDを1件返す。
+ *
+ * I/O:
+ *   @param {Request} request                                   - クエリにsectionを含むリクエスト
+ *   @returns {NextResponse}                                     - JSON: { lot_id } もしくは 204
+ *
+ * ステータス:
+ *   200                                                         - 見つかった
+ *   204                                                         - 見つからない
+ *   400                                                         - 入力エラー
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request) {
   

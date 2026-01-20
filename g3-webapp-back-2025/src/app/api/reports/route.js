@@ -1,9 +1,32 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 日報一覧の取得 と 新規登録 のAPIを提供します。
+ * 従業員名・ライン名の部分一致、期間（start_date/end_date）絞り込みに対応し、
+ * JOINで従業員名・ライン名も合わせて返します。SQLはすべてパラメータ化します。
+ */
 import { NextResponse } from 'next/server';
 import db from '@/lib/db'; // 従業員APIと同じdbインスタンスをインポート
 
 /**
  * 1. 日報一覧取得 (GET)
  * @description 従業員APIのGETリクエストの構成に準拠
+ *
+ * 引数（Query Params）
+ * - employee_name : 文字列（部分一致）
+ * - line_name     : 文字列（部分一致）
+ * - start_date    : 'YYYY-MM-DD'（この日付以降）
+ * - end_date      : 'YYYY-MM-DD'（この日付以前）
+ *
+ * 成功時の戻り値（200）
+ * - reports: 配列。{ report_id, employee_id, employee_name, line_id, line_name, report_date, notes, updated_at }
+ *
+ * エラー
+ * - 500 サーバーエラー：DBアクセス等で異常が発生した場合。
+ *
+ * 実装方針の要点
+ * - where句は動的組み立て。文字列はLIKEで部分一致、日付は>= / <=の範囲指定。
+ * - 重複条件をSetで除去してクリーンなWHERE句を生成。
  */
 export async function GET(request) {
   try {
@@ -101,6 +124,20 @@ export async function GET(request) {
 /**
  * 2. 新しい日報を登録するAPI (POST)
  * @description 従業員APIのPOSTリクエストの構成に準拠
+ *
+ * リクエストボディ（JSON）
+ * - employee_id : 数値（必須）
+ * - line_id     : 数値（必須）
+ * - report_date : 文字列 'YYYY-MM-DD'（必須）
+ * - notes       : 文字列 | null
+ *
+ * 成功時の戻り値（201）
+ * - report_id, employee_id, line_id, report_date, notes, created_at, updated_at
+ *
+ * エラー
+ * - 400 入力不足                 : 必須項目不足。
+ * - 400 FK制約違反               : 指定従業員/ラインが存在しない（23503）。
+ * - 500 サーバーエラー           : DBアクセス等で異常。
  */
 export async function POST(request) {
   try {

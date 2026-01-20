@@ -1,3 +1,8 @@
+/**
+ * ファイルの役割:
+ *   【検査結果一括登録(ばねどめ)】のAPIルート。
+ *   before/after両画像と結果(status, details)を1リクエストで登録するバッチ処理を提供する。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db'; // 修正済みのDB接続プール
 import { writeFile } from 'fs/promises'; // 画像保存用
@@ -11,6 +16,25 @@ import { emitEvent } from '@/lib/event-bus';
 /**
  * API: 10. 検査結果一括登録(ばねどめ検査用)
  * (POST /api/ingress/inspection/batch/{lot_id})
+ *
+ * 説明:
+ *   lot_id/section_codeで親ロットを特定し、指定ショットのbefore/after画像保存と結果登録を同時に行う。
+ *
+ * I/O:
+ *   @param {Request} request                                   - multipart/form-data リクエスト
+ *   @param {{ params: { lot_id: string } }} context            - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: 登録結果
+ *
+ * リクエスト(form-data):
+ *   metadata                                                    - JSON文字列。{ lot_id, section_code, camera_id, status('PASS'|'FAIL'), details?, shot_seq }
+ *   beforeImage                                                 - 検査前画像(Binary)
+ *   afterImage                                                  - 検査後画像(Binary)
+ *
+ * ステータス:
+ *   201                                                         - 登録成功
+ *   400                                                         - 入力エラー
+ *   404                                                         - 親ロット未発見
+ *   500                                                         - サーバ内部エラー
  */
 export async function POST(request, context) {
   const client = await pool.connect(); // 3つの処理(DB+画像x2)のためトランザクション
@@ -87,6 +111,7 @@ export async function POST(request, context) {
     const filename = `${lot_id}_${camera_id}_${shot_seq}.jpg`;
     
     // 8. 画像ファイル(Before)をサーバーに保存
+    // なぜ: DBはパスのみ保持し、実体は所定ディレクトリに置く
     const beforeBuffer = Buffer.from(await beforeImageFile.arrayBuffer());
     const beforeImageUrl = buildBeforeImageUrl(filename);
     const beforeSavePath = await prepareImageTarget(beforeImageUrl);
@@ -99,6 +124,7 @@ export async function POST(request, context) {
     await writeFile(afterSavePath, afterBuffer);
 
     // 10. (DB処理 2) inspection_camera_shots にデータを INSERT
+    // なぜ: API10は結果まで一度に確定させる仕様のため
     // (API 10 は API 6/7 と違い、1回で結果(status)まで登録する)
     const imageDbPath = beforeImageUrl; // DBには 'beforeTest' のパスを保存
     const insertQuery = `

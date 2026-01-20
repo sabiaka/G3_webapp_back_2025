@@ -1,3 +1,9 @@
+/**
+ * ファイル概要
+ * ==========
+ * このファイルは 指定ラックの情報取得・スロットのUpsert・ラック削除 を行うAPIを提供します。
+ * rows×colsの全スロットキー（例: A-1）を生成し、未登録スロットはnull、登録済みはDB値を返します。
+ */
 // src/app/api/racks/[rack_id]/route.js
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
@@ -9,6 +15,23 @@ function rowLabels(n) {
   return labels;
 }
 
+/**
+ * GET /api/racks/{rack_id}
+ * --------------------------------------
+ * 指定ラックの基本情報と全スロットの構成を返します。
+ *
+ * 引数（Path Params）
+ * - rack_id : 数値（必須）
+ *
+ * 成功時の戻り値（200）
+ * - rack_id, rack_name, rows, cols
+ * - slots    : オブジェクト。キー＝"A-1" 等。未登録は null、登録済みは { part_name, part_model_number, quantity, color_code }
+ *
+ * エラー
+ * - 400 Invalid rack_id       : rack_idが整数でない。
+ * - 404 Not found             : ラック未存在。
+ * - 500 Internal Server Error : DBエラー等。
+ */
 export async function GET(req, ctx) {
   // Next.js 15 以降 params は Promise になるため await が必要
   const { rack_id } = await ctx.params;
@@ -70,6 +93,25 @@ export async function GET(req, ctx) {
 }
 
 // 1マス更新/登録（任意）: PATCH /api/racks/{rack_id}
+/**
+ * PATCH /api/racks/{rack_id}
+ * --------------------------------------
+ * 指定ラックの1スロットをUpsertします。存在すれば更新、無ければ挿入。
+ *
+ * リクエストボディ（JSON）
+ * - slot_identifier    : 文字列（必須）例: "A-1"
+ * - part_name          : 文字列 | null
+ * - part_model_number  : 文字列 | null
+ * - quantity           : 数値 | null
+ * - color_code         : 文字列 | null （例: "#FF5733"）
+ *
+ * 成功時の戻り値（200）
+ * - スロットの最新情報
+ *
+ * エラー
+ * - 400 入力不正                : slot_identifier なし等。
+ * - 500 Internal Server Error   : DBエラー等。
+ */
 export async function PATCH(req, ctx) {
   const { rack_id } = await ctx.params;
   const rackId = Number(rack_id);
@@ -107,6 +149,19 @@ export async function PATCH(req, ctx) {
 }
 
 // ★ 追加: ラック削除 DELETE /api/racks/{rack_id}
+/**
+ * DELETE /api/racks/{rack_id}
+ * --------------------------------------
+ * 指定ラックを削除します。関連スロットも事前に削除し、トランザクションで整合性を担保します。
+ *
+ * 成功時の戻り値（200）
+ * - message : 文字列。削除完了メッセージ。
+ *
+ * エラー
+ * - 400 Invalid rack_id       : rack_idが整数でない。
+ * - 404 Not found             : ラック未存在。
+ * - 500 Internal Server Error : DB/トランザクションエラー等。
+ */
 export async function DELETE(req, ctx) {
   const { rack_id } = await ctx.params;
   const rackId = Number(rack_id);

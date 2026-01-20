@@ -1,3 +1,7 @@
+/**
+ * ファイルの役割:
+ *   指定ロットの指定c4k_seqに属するFHDショット一覧とOK/NG率を返すAPI。
+ */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
@@ -5,6 +9,19 @@ import pool from '@/lib/db';
  * API: FHDショット一覧 + ★進捗集計 (OK/NG率)
  * (GET /api/inspections/lots/{lot_id}/shots/FHD/{c4k_seq})
  * ★JSONキーを "c4k_seq" に変更
+ *
+ * 説明:
+ *   指定c4k_seq配下のFHDショットを取得し、PASS/その他(NG)を集計して返す。
+ *
+ * I/O:
+ *   @param {Request} request                                   - リクエスト
+ *   @param {{ params: { lot_id: string, c4k_seq: string } }} context - パスパラメータ
+ *   @returns {NextResponse}                                     - JSON: { lot_id, c4k_seq, summary, shots }
+ *
+ * ステータス:
+ *   200                                                         - 成功
+ *   404                                                         - ロット未発見
+ *   500                                                         - サーバ内部エラー
  */
 export async function GET(request, context) {
   const { lot_id, c4k_seq } = await context.params; 

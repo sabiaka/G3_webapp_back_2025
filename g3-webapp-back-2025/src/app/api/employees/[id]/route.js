@@ -1,3 +1,14 @@
+/**
+ * ファイルの役割:
+ *   従業員1件の参照・更新・削除を提供するAPIルート。
+ *   Next.js App Router 配下のエンドポイントとして、GET/PUT/DELETE を実装。
+ *   DBアクセスは pg のプール経由で生SQL(プレースホルダ)を使用する。
+ *
+ * 実装ポリシー:
+ *   - 見つからない場合は404を返す(仕様の明確化)。
+ *   - 更新は差分のみをSQLでセットし、空更新は400で返す。
+ *   - 削除は仕様通り物理削除で204 No Contentを返す。
+ */
 // --- 必要なインポート ---
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
@@ -5,9 +16,23 @@ import bcrypt from 'bcrypt';
 
 /**
  * 従業員データを1件取得するAPI (GET by ID)
+ *
+ * 説明:
+ *   `employee_id` に一致する従業員を取得し、役割名・ライン名を結合して返す。
+ *
+ * I/O:
+ *   @param {Request} request                                 - Next.jsのRequestオブジェクト
+ *   @param {{ params: { id: string } }} context              - ルートパラメータコンテキスト
+ *   @returns {NextResponse}                                   - JSON: EmployeeSummary | 404
+ *
+ * ステータス:
+ *   200                                                       - 正常終了
+ *   404                                                       - 該当レコードなし
+ *   500                                                       - サーバ内部エラー
  */
 export async function GET(request, { params }) {
   try {
+    // ======== ルートパラメータの取得 ========
     const { id } = await params;
     const query = `
       SELECT
@@ -24,6 +49,7 @@ export async function GET(request, { params }) {
       LEFT JOIN production_lines pl ON e.employee_line_id = pl.line_id
       WHERE e.employee_id = $1;
     `;
+    // なぜ: パラメータバインドでSQLインジェクションを回避
     const result = await db.query(query, [id]);
 
     if (result.rows.length === 0) {
@@ -31,6 +57,7 @@ export async function GET(request, { params }) {
     }
 
     // レスポンスのキー名を整形
+    // なぜ: クライアントの期待する命名規則に合わせるため
     const employee = result.rows[0];
     const formattedEmployee = {
         employee_id: employee.employee_id,
@@ -54,10 +81,38 @@ export async function GET(request, { params }) {
 
 /**
  * 従業員データを更新するAPI (PUT)
+ *
+ * 説明:
+ *   差分更新API。指定フィールドのみSETし、空更新は400を返す。
+ *   パスワードは文字列かつ長さ>0のときのみbcryptで再ハッシュ化して更新する。
+ *
+ * I/O:
+ *   @param {Request} request                                 - Next.jsのRequestオブジェクト
+ *   @param {{ params: { id: string } }} context              - ルートパラメータコンテキスト
+ *   @returns {NextResponse}                                   - JSON: 更新後の従業員整形データ
+ *
+ * 受信ボディ(JSON):
+ *   employee_name                                            - 従業員名(任意)
+ *   employee_user_id                                         - ユーザーID(任意, 一意制約あり)
+ *   password                                                 - 新パスワード(任意, 指定時のみハッシュ更新)
+ *   role_id                                                  - 役割ID(任意, 外部キー)
+ *   line_id                                                  - ラインID(任意, 外部キー)
+ *   is_active                                                - 有効/無効(任意, boolean)
+ *   color_code                                               - カラーコード(任意)
+ *   special_notes                                            - 特記事項(任意)
+ *
+ * ステータス:
+ *   200                                                       - 更新成功
+ *   400                                                       - 更新対象なし(空更新)
+ *   404                                                       - 対象IDなし
+ *   409                                                       - 一意制約違反
+ *   400                                                       - 外部キー不正
+ *   500                                                       - サーバ内部エラー
  */
 export async function PUT(request, { params }) {
   const { id } = await params;
   try {
+    // ======== 入力取得 ========
     const body = await request.json();
 
     const {
@@ -71,11 +126,13 @@ export async function PUT(request, { params }) {
       special_notes,
     } = body || {};
 
+    // ======== 存在チェック: 更新対象がない場合は404 ========
     const exists = await db.query('SELECT 1 FROM employees WHERE employee_id = $1', [id]);
     if (exists.rows.length === 0) {
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
     }
 
+    // ======== 差分SET句の構築: 渡された項目のみ更新 ========
     const sets = [];
     const vals = [];
     let i = 1;
@@ -89,6 +146,7 @@ export async function PUT(request, { params }) {
     if (line_id !== undefined) { sets.push(`employee_line_id = $${i++}`); vals.push(line_id); }
     
     if (typeof password === 'string' && password.length > 0) {
+      // なぜ: パスワードは常にハッシュ化して保存する(安全性確保)
       const hashedPassword = await bcrypt.hash(password, 10);
       sets.push(`employee_password = $${i++}`);
       vals.push(hashedPassword);
@@ -98,11 +156,13 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: '更新対象のフィールドがありません' }, { status: 400 });
     }
 
+    // ======== 実行 ========
     vals.push(id);
     const sql = `UPDATE employees SET ${sets.join(', ')} WHERE employee_id = $${i} RETURNING *;`;
     const result = await db.query(sql, vals);
     const updatedEmployee = result.rows[0];
 
+    // ======== 整形 ========
     const formattedResponse = {
         employee_id: updatedEmployee.employee_id,
         employee_name: updatedEmployee.employee_name,
