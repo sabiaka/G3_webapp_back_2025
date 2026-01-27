@@ -1,6 +1,6 @@
 /**
  * ファイルの役割:
- *   指定ロットの4Kショットを重複排除して一覧返却し、OK/NG率も集計するAPI。
+ * 指定ロットの4Kショットを重複排除して一覧返却し、OK/NG率も集計するAPI。
  */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
@@ -8,20 +8,20 @@ import pool from '@/lib/db';
 /**
  * API 3.1: 4Kショット一覧（重複排除） + ★進捗集計 (OK/NG率)
  * (GET /api/inspections/lots/{lot_id}/shots/4K)
- * ★JSONキーを "c4k_seq" に変更
  *
  * 説明:
- *   c4k_seqごとに最新1件を代表として返却し、PASS/その他(NG)の比率を算出する。
+ * c4k_seqごとに1件を代表として返却し、PASS/その他(NG)の比率を算出する。
+ * ※修正: FAILが存在する場合は、IDの新旧に関わらずFAILを優先して採用する。
  *
  * I/O:
- *   @param {Request} request                                   - リクエスト
- *   @param {{ params: { lot_id: string } }} context            - パスパラメータ
- *   @returns {NextResponse}                                     - JSON: { lot_id, summary, shots }
+ * @param {Request} request                                   - リクエスト
+ * @param {{ params: { lot_id: string } }} context            - パスパラメータ
+ * @returns {NextResponse}                                     - JSON: { lot_id, summary, shots }
  *
  * ステータス:
- *   200                                                         - 成功
- *   404                                                         - ロット未発見
- *   500                                                         - サーバ内部エラー
+ * 200                                                         - 成功
+ * 404                                                         - ロット未発見
+ * 500                                                         - サーバ内部エラー
  */
 export async function GET(request, context) {
   const { lot_id } = await context.params; 
@@ -42,11 +42,12 @@ export async function GET(request, context) {
     const lotIdRef = lotResult.rows[0].id;
 
     // 2. 4Kショット一覧を取得
-    // "DISTINCT ON (c4k_seq)" を使い、c4k_seq ごとに最新の1件(id DESC)を代表として取得
+    // "DISTINCT ON (c4k_seq)" を使い、c4k_seq ごとに代表の1件を取得
+    // ★修正: 単純な id DESC (最新順) ではなく、FAILを優先表示するソート順に変更
     const distinctQuery = `
       SELECT DISTINCT ON (c4k_seq)
         camera_id,
-        c4k_seq,  -- ★変更: エイリアス(AS "4k_seq")を削除し、そのまま出力
+        c4k_seq,
         shot_seq,
         status,
         details,
@@ -57,13 +58,20 @@ export async function GET(request, context) {
         lot_id_ref = $1
         AND c4k_seq IS NOT NULL
       ORDER BY
-        c4k_seq ASC, id DESC;
+        c4k_seq ASC,
+        -- ★追加: ステータスの優先順位付け (数値が小さい方が優先)
+        CASE 
+          WHEN status = 'FAIL' THEN 1      -- FAIL を最優先
+          WHEN status = 'MISSING' THEN 2   -- 次に MISSING
+          ELSE 3                           -- PASS などは最後
+        END ASC,
+        id DESC; -- ステータスの優先度が同じ場合は、最新(idが大きい方)を採用
     `;
 
     const shotsResult = await pool.query(distinctQuery, [lotIdRef]);
     const shots = shotsResult.rows;
 
-    // --- ★追加: 集計ロジック (Summary) ---
+    // --- 集計ロジック (Summary) ---
     const total = shots.length;
     let okCount = 0;
     let ngCount = 0;
@@ -92,7 +100,7 @@ export async function GET(request, context) {
         ok_rate: okRate,
         ng_rate: ngRate
       },
-      shots: shots // 各ショットの中に "c4k_seq" が含まれます
+      shots: shots
     });
 
   } catch (error) {
