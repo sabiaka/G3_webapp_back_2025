@@ -1,22 +1,9 @@
-/**
- * ファイルの役割:
- * セクション内でデータが存在する日時一覧(降順)を返すAPI。
- * DB上のUTC時刻を日本時間(JST)に変換して取得します。
- */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
  * 日時一覧取得 (GET)
- *
- * 説明:
- * section_codeでフィルタし、captured_atを日本時間に変換した上での
- * 重複を除いた日時(YYYY-MM-DD HH24:MI)のリストを返す。
- *
- * I/O:
- * @param {Request} request                                   - リクエスト
- * @param {{ params: { section: string } }} context           - パスパラメータ
- * @returns {NextResponse}                                     - JSON: { section, dates }
+ * 修正内容: ロットごとの最新ショット日から、重複のない「日付リスト」を取得します。
  */
 export async function GET(request, { params }) {
   try {
@@ -29,20 +16,27 @@ export async function GET(request, { params }) {
       );
     }
 
+    // 修正ポイント: 
+    // 1. フォーマットを 'YYYY-MM-DD' に変更
+    // 2. DISTINCT を使い、1日に複数ロットあっても日付が重複しないようにする
     const datesQuery = `
       SELECT DISTINCT
-          -- UTCで保存されているcaptured_atを日本時間(Asia/Tokyo)に変換し、
-          -- 分単位までの文字列として抽出します。
-          to_char(captured_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI') AS inspection_date
+          to_char(MAX(s.captured_at) AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS inspection_date
       FROM
-          inspection_lots
+          inspection_lots l
+      JOIN 
+          inspection_camera_shots s ON l.id = s.lot_id_ref
       WHERE
-          section_code = $1
+          l.section_code = $1
+      GROUP BY
+          l.id
       ORDER BY
           inspection_date DESC;
     `;
 
     const result = await pool.query(datesQuery, [section]);
+    
+    // row.inspection_date の中身は "2026-01-27" のような形式になります
     const dates = result.rows.map(row => row.inspection_date);
 
     const responseData = {
