@@ -1,32 +1,9 @@
-/**
- * ファイルの役割:
- *   検査ロット一覧の取得API。
- *   セクション・日付・ページングでフィルタし、代表画像/進捗情報とあわせて返す。
- */
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
  * API: 3. 検査ロット取得 (一覧・ページネーション)
  * (GET /api/inspections/lots?section={section}&date={date}&page={page}&limit={limit})
- *
- * 説明:
- *   指定がない場合はDBから最新日付を自動選択し、その日付のロットを返す。
- *   代表画像/表示時刻はショットに従い、見つからない場合は親のcaptured_atを利用。
- *
- * I/O:
- *   @param {Request} request                                   - クエリを含むリクエスト
- *   @returns {NextResponse}                                     - JSON: { total_pages, current_page, lots }
- *
- * クエリ:
- *   section                                                     - 'spring'|'alayer' (任意)
- *   date                                                        - 'YYYY-MM-DD' (任意)
- *   page                                                        - 1以上の整数(既定1)
- *   limit                                                       - 1以上の整数(既定50)
- *
- * ステータス:
- *   200                                                         - 成功
- *   500                                                         - サーバ内部エラー
  */
 export async function GET(request) {
   try {
@@ -42,14 +19,13 @@ export async function GET(request) {
 
     if (!targetDate) {
       try {
-        // 日付指定がない場合、DBから最新の日付を取得する
+        // 【修正】取得時に日本時間へ変換
         let latestDateQuery = `
-          SELECT to_char(captured_at, 'YYYY-MM-DD') as latest_date
+          SELECT to_char(captured_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') as latest_date
           FROM inspection_lots
         `;
         const latestParams = [];
 
-        // セクション指定がある場合は絞り込む
         if (section) {
           latestDateQuery += ` WHERE section_code = $1`;
           latestParams.push(section);
@@ -62,8 +38,8 @@ export async function GET(request) {
         if (latestResult.rows.length > 0) {
           targetDate = latestResult.rows[0].latest_date;
         } else {
-          // データが1件もない場合は本日 (UTC)
-          targetDate = new Date().toISOString().split('T')[0];
+          // JSTの現在日付をデフォルトにする
+          targetDate = new Date(Date.now() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
         }
       } catch (e) {
         console.error('Latest date fetch error:', e);
@@ -80,8 +56,8 @@ export async function GET(request) {
       queryParams.push(section);
     }
     
-    // 決定した targetDate で検索
-    whereClause += ` AND to_char(captured_at, 'YYYY-MM-DD') = $${queryParams.length + 1}`;
+    // 【修正】比較条件を日本時間ベースに変更
+    whereClause += ` AND to_char(captured_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') = $${queryParams.length + 1}`;
     queryParams.push(targetDate);
 
     const countQuery = `SELECT COUNT(*) AS total FROM inspection_lots ${whereClause}`;
@@ -119,20 +95,14 @@ export async function GET(request) {
     // --- ステップ 4: レスポンス構築 ---
     const responseLots = lots.map(lot => {
       const lotShots = allShots.filter(s => s.lot_id_ref === lot.id);
-
       let representativeImage = null;
-
-      // ★変更点: 初期値は親テーブルの時刻にしておくが、代表画像が見つかれば上書きする
       let displayCapturedAt = lot.captured_at;
 
       if (lotShots.length > 0) {
         const firstShot = lotShots[0];
-
-        // ★変更点: 代表画像の時刻を採用する
         if (firstShot.captured_at) {
           displayCapturedAt = firstShot.captured_at;
         }
-
         if (firstShot.status === 'PASS' || firstShot.status === 'FAIL') {
           representativeImage = firstShot.image_path?.replace('beforeTest', 'afterTest');
         } else {
@@ -144,56 +114,40 @@ export async function GET(request) {
       let details = {};
 
       if (lot.section_code === 'alayer') {
-        // alayer (4Kシーケンス単位)
         const seqMap = new Map();
         lotShots.forEach(shot => {
           const k4 = shot.c4k_seq;
           if (!k4) return;
           const currentStatus = seqMap.get(k4);
-
           if (shot.status === 'FAIL') {
             seqMap.set(k4, 'FAIL');
             pass = false;
             return;
           }
-
           if (shot.status === 'MISSING') {
-            if (currentStatus !== 'FAIL') {
-              seqMap.set(k4, 'MISSING');
-            }
+            if (currentStatus !== 'FAIL') seqMap.set(k4, 'MISSING');
             return;
           }
-
-          if (!currentStatus) {
-            seqMap.set(k4, 'PASS');
-          }
+          if (!currentStatus) seqMap.set(k4, 'PASS');
         });
         details.four_k_sequences = Array.from(seqMap.entries()).map(([k, v]) => ({
           "c4k_seq": k, "status": v
         }));
       } else {
-        // spring (カメラ単位)
         const camMap = new Map();
         lotShots.forEach(shot => {
           const cam = shot.camera_id;
           const currentStatus = camMap.get(cam);
-
           if (shot.status === 'FAIL') {
             camMap.set(cam, 'FAIL');
             pass = false;
             return;
           }
-
           if (shot.status === 'MISSING') {
-            if (currentStatus !== 'FAIL') {
-              camMap.set(cam, 'MISSING');
-            }
+            if (currentStatus !== 'FAIL') camMap.set(cam, 'MISSING');
             return;
           }
-
-          if (!currentStatus) {
-            camMap.set(cam, 'PASS');
-          }
+          if (!currentStatus) camMap.set(cam, 'PASS');
         });
         details.cameras = Array.from(camMap.entries()).map(([k, v]) => ({
           "camera_id": k, "status": v
@@ -203,7 +157,7 @@ export async function GET(request) {
       return {
         lot_id: lot.lot_id,
         section: lot.section_code,
-        captured_at: displayCapturedAt, // ★ここで代表画像の時刻 (または親時刻) を返す
+        captured_at: displayCapturedAt,
         pass: pass,
         representative_image: representativeImage,
         ...details
