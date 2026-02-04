@@ -1,98 +1,78 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
-/**
- * API: 3. 検査ロット取得 (一覧・ページネーション)
- * (GET /api/inspections/lots?section={section}&date={date}&page={page}&limit={limit})
- */
+// 【追加】Next.jsのAPIキャッシュを強制的に無効化
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const section = searchParams.get('section'); // 'spring' or 'alayer'
-    const dateParam = searchParams.get('date');  // 'YYYY-MM-DD' (任意)
+    const section = searchParams.get('section');
+    const dateParam = searchParams.get('date');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = (page - 1) * limit;
 
-    // --- ステップ 0: 対象日付の決定 (最新日付自動取得ロジック) ---
+    // --- ステップ A: DBセッションを日本時間に設定 ---
+    // これにより、以降のクエリでの時刻計算がすべて日本時間基準になります
+    await pool.query("SET TIME ZONE 'Asia/Tokyo'");
+
+    // --- ステップ B: 対象日付の決定 ---
     let targetDate = dateParam;
-
     if (!targetDate) {
-      try {
-        // 【修正】取得時に日本時間へ変換
-        let latestDateQuery = `
-          SELECT to_char(captured_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') as latest_date
-          FROM inspection_lots
-        `;
-        const latestParams = [];
+      const latestResult = await pool.query(`
+        SELECT to_char(captured_at, 'YYYY-MM-DD') as latest_date
+        FROM inspection_lots
+        ${section ? 'WHERE section_code = $1' : ''}
+        ORDER BY captured_at DESC LIMIT 1
+      `, section ? [section] : []);
 
-        if (section) {
-          latestDateQuery += ` WHERE section_code = $1`;
-          latestParams.push(section);
-        }
-
-        latestDateQuery += ` ORDER BY captured_at DESC LIMIT 1`;
-
-        const latestResult = await pool.query(latestDateQuery, latestParams);
-
-        if (latestResult.rows.length > 0) {
-          targetDate = latestResult.rows[0].latest_date;
-        } else {
-          // JSTの現在日付をデフォルトにする
-          targetDate = new Date(Date.now() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
-        }
-      } catch (e) {
-        console.error('Latest date fetch error:', e);
-        targetDate = new Date().toISOString().split('T')[0];
-      }
+      targetDate = latestResult.rows[0]?.latest_date || new Date().toLocaleDateString('sv-SE');
     }
 
-    // --- ステップ 1: 総件数と総ページ数 ---
-    let whereClause = "WHERE 1=1";
-    const queryParams = [];
+    // --- ステップ C: 日付範囲の構築 ---
+    // 文字列比較ではなく、時刻の範囲（00:00:00 ～ 23:59:59）で検索します
+    // これがタイムゾーン問題を解決する最も確実な方法です
+    const startOfDay = `${targetDate} 00:00:00`;
+    const endOfDay = `${targetDate} 23:59:59`;
+
+    let whereClause = "WHERE captured_at BETWEEN $1 AND $2";
+    const queryParams = [startOfDay, endOfDay];
 
     if (section) {
-      whereClause += ` AND section_code = $${queryParams.length + 1}`;
+      whereClause += ` AND section_code = $3`;
       queryParams.push(section);
     }
-    
-    // 【修正】比較条件を日本時間ベースに変更
-    whereClause += ` AND to_char(captured_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') = $${queryParams.length + 1}`;
-    queryParams.push(targetDate);
 
-    const countQuery = `SELECT COUNT(*) AS total FROM inspection_lots ${whereClause}`;
-    const countResult = await pool.query(countQuery, queryParams);
+    // --- ステップ D: データの取得 ---
+    const countResult = await pool.query(`SELECT COUNT(*) AS total FROM inspection_lots ${whereClause}`, queryParams);
     const totalCount = parseInt(countResult.rows[0].total, 10);
     const totalPages = Math.ceil(totalCount / limit);
 
-    // --- ステップ 2: ロット一覧を取得 ---
-    const lotsQuery = `
+    const lotsResult = await pool.query(`
       SELECT id, lot_id, section_code, captured_at
       FROM inspection_lots
       ${whereClause}
       ORDER BY captured_at DESC
       LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
-    `;
-    const lotsResult = await pool.query(lotsQuery, [...queryParams, limit, offset]);
+    `, [...queryParams, limit, offset]);
+
     const lots = lotsResult.rows;
 
     if (lots.length === 0) {
-      return NextResponse.json({ total_pages: totalPages, current_page: page, lots: [] });
+      return NextResponse.json({ total_pages: totalPages, current_page: page, lots: [], debug_date: targetDate });
     }
 
-    // --- ステップ 3: ショット一括取得 ---
+    // --- ステップ E: ショット取得とレスポンス構築 (ロジックは維持) ---
     const lotIds = lots.map(l => l.id);
-    const shotsQuery = `
-      SELECT 
-        lot_id_ref, camera_id, c4k_seq, status, image_path, id, captured_at
+    const shotsResult = await pool.query(`
+      SELECT lot_id_ref, camera_id, c4k_seq, status, image_path, id, captured_at
       FROM inspection_camera_shots
       WHERE lot_id_ref = ANY($1::bigint[])
       ORDER BY id ASC;
-    `;
-    const shotsResult = await pool.query(shotsQuery, [lotIds]);
+    `, [lotIds]);
     const allShots = shotsResult.rows;
 
-    // --- ステップ 4: レスポンス構築 ---
     const responseLots = lots.map(lot => {
       const lotShots = allShots.filter(s => s.lot_id_ref === lot.id);
       let representativeImage = null;
@@ -100,58 +80,31 @@ export async function GET(request) {
 
       if (lotShots.length > 0) {
         const firstShot = lotShots[0];
-        if (firstShot.captured_at) {
-          displayCapturedAt = firstShot.captured_at;
-        }
-        if (firstShot.status === 'PASS' || firstShot.status === 'FAIL') {
-          representativeImage = firstShot.image_path?.replace('beforeTest', 'afterTest');
-        } else {
-          representativeImage = firstShot.image_path;
-        }
+        if (firstShot.captured_at) displayCapturedAt = firstShot.captured_at;
+        representativeImage = firstShot.image_path?.replace('beforeTest', 'afterTest');
       }
 
       let pass = true;
       let details = {};
-
       if (lot.section_code === 'alayer') {
         const seqMap = new Map();
         lotShots.forEach(shot => {
           const k4 = shot.c4k_seq;
           if (!k4) return;
-          const currentStatus = seqMap.get(k4);
-          if (shot.status === 'FAIL') {
-            seqMap.set(k4, 'FAIL');
-            pass = false;
-            return;
-          }
-          if (shot.status === 'MISSING') {
-            if (currentStatus !== 'FAIL') seqMap.set(k4, 'MISSING');
-            return;
-          }
-          if (!currentStatus) seqMap.set(k4, 'PASS');
+          if (shot.status === 'FAIL') { seqMap.set(k4, 'FAIL'); pass = false; }
+          else if (shot.status === 'MISSING' && seqMap.get(k4) !== 'FAIL') { seqMap.set(k4, 'MISSING'); }
+          else if (!seqMap.has(k4)) { seqMap.set(k4, 'PASS'); }
         });
-        details.four_k_sequences = Array.from(seqMap.entries()).map(([k, v]) => ({
-          "c4k_seq": k, "status": v
-        }));
+        details.four_k_sequences = Array.from(seqMap.entries()).map(([k, v]) => ({ "c4k_seq": k, "status": v }));
       } else {
         const camMap = new Map();
         lotShots.forEach(shot => {
           const cam = shot.camera_id;
-          const currentStatus = camMap.get(cam);
-          if (shot.status === 'FAIL') {
-            camMap.set(cam, 'FAIL');
-            pass = false;
-            return;
-          }
-          if (shot.status === 'MISSING') {
-            if (currentStatus !== 'FAIL') camMap.set(cam, 'MISSING');
-            return;
-          }
-          if (!currentStatus) camMap.set(cam, 'PASS');
+          if (shot.status === 'FAIL') { camMap.set(cam, 'FAIL'); pass = false; }
+          else if (shot.status === 'MISSING' && camMap.get(cam) !== 'FAIL') { camMap.set(cam, 'MISSING'); }
+          else if (!camMap.has(cam)) { camMap.set(cam, 'PASS'); }
         });
-        details.cameras = Array.from(camMap.entries()).map(([k, v]) => ({
-          "camera_id": k, "status": v
-        }));
+        details.cameras = Array.from(camMap.entries()).map(([k, v]) => ({ "camera_id": k, "status": v }));
       }
 
       return {
@@ -171,7 +124,7 @@ export async function GET(request) {
     });
 
   } catch (error) {
-    console.error('API Error (GET /inspections/lots):', error);
-    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+    console.error('API Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
