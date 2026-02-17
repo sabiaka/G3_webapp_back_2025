@@ -18,6 +18,11 @@ MACHINE_ID = 1
 MACHINE_NAME = "半自動表層バネどめ機"
 POLL_INTERVAL_SEC = 1.0
 
+# モード切替（環境変数）
+# READ_MODE=D   : Dのみ監視（普段）
+# READ_MODE=ALL : D + X + Y を監視（デバッグ）
+READ_MODE = os.getenv("READ_MODE", "D").upper()
+
 # =========================
 # 共通：API送信関数
 # =========================
@@ -64,7 +69,6 @@ def read_d_word(plc, device):
     return plc.batchread_wordunits(headdevice=device, readsize=1)[0]
 
 def read_bit(plc, device):
-    # pymcprotocolは bit を 0/1 で返す想定
     return plc.batchread_bitunits(headdevice=device, readsize=1)[0]
 
 # =========================
@@ -99,9 +103,7 @@ X_MAP = {
     "X30": ("PH1",  "押上部LS2 表面ホックリンガ位置", "info"),
     "X31": ("PH2",  "押上部LS3 裏面ホックリンガ位置", "info"),
 
-    # 重要系
     "X36": ("ALM",  "ステッピングモータ アラーム発生", "error"),
-    # 「非常停止中(OFFで動作)」= 0が非常停止、1が解除
     "X37": ("P24E", "非常停止中(OFFで動作)", "error"),
 }
 
@@ -148,20 +150,17 @@ Y_MAP = {
     "Y42": ("STOP",    "ステッピングモータ 停止", "info"),
     "Y43": ("ALM_RST", "ステッピングモータ アラーム解除", "info"),
 
-    # データ領域は「監視ログ不要」なら外してOK（ON/OFFで通知される）
     "Y44": ("M10", "ステッピングモータ1 データ領域", "info"),
     "Y45": ("M20", "ステッピングモータ2 データ領域", "info"),
     "Y46": ("M30", "ステッピングモータ3 データ領域", "info"),
     "Y47": ("M40", "ステッピングモータ4 データ領域", "info"),
 }
 
-# Dレジスタの「値→意味」定義
 D_DECODE = {
     "D0":  {1: ("info",    "I-000: PLC 通電完了",      "システム起動確認")},
     "D1":  {1: ("info",    "I-002: PLC スタンバイ",    "待機状態")},
     "D2":  {1: ("info",    "I-001: 生産完了",          "マットレス1枚生産終了")},
 
-    # warning
     "D100": {
         1: ("warning", "W-001: 全ユニット共通エラー", "ユニット全体の確認が必要"),
         2: ("warning", "W-002: 全ユニット共通エラー", "ユニット全体の確認が必要"),
@@ -173,7 +172,6 @@ D_DECODE = {
     "D103": {1: ("warning", "W-103: ユニット3残弾低下", "補給を準備してください")},
     "D104": {1: ("warning", "W-104: ユニット4残弾低下", "補給を準備してください")},
 
-    # error
     "D900": {
         1:  ("error", "E-001: 非常停止ボタン作動",     "装置が停止しました"),
         2:  ("error", "E-002: PLC エラー",             "D900=0002"),
@@ -196,13 +194,11 @@ def monitor_words(plc, prev_state: dict):
             value = read_d_word(plc, reg)
             prev = prev_state.get(reg, None)
 
-            # 「変化したとき」だけ通知（0→1 だけでなく、1→2 等も拾う）
             if prev is None:
                 prev_state[reg] = value
                 continue
 
             if value != prev:
-                # 0に戻った＝解除ログを出したい場合はここで
                 if value == 0 and prev != 0:
                     send_log_to_server("info", f"I-{reg}: {reg} 解除", f"{reg} が 0 に戻りました（解除）")
                 else:
@@ -211,13 +207,11 @@ def monitor_words(plc, prev_state: dict):
                         log_type, title, msg = decode[value]
                         send_log_to_server(log_type, title, msg)
 
-                        # 既存の動作
                         if reg == "D1" and value == 1:
                             call_machine_start()
                         if reg == "D2" and value == 1:
                             call_increment_production(section="spring")
                     else:
-                        # 未定義コードでもログに残す
                         send_log_to_server("info", f"I-{reg}: {reg} 変化", f"{reg}={value}（未定義コード）")
 
                 prev_state[reg] = value
@@ -226,10 +220,6 @@ def monitor_words(plc, prev_state: dict):
             print(f"❌ D読取エラー {reg}: {e}")
 
 def monitor_bits(plc, prev_state: dict, bit_map: dict, prefix: str):
-    """
-    bit_map: { "X00": (name, desc, level), ... }
-    prefix: 'X' or 'Y'
-    """
     for dev, (name, desc, level) in bit_map.items():
         try:
             val = int(read_bit(plc, dev))
@@ -240,18 +230,15 @@ def monitor_bits(plc, prev_state: dict, bit_map: dict, prefix: str):
                 continue
 
             if val != prev:
-                # X37だけ特殊（0が非常停止）
                 if dev == "X37":
                     if val == 0:
                         send_log_to_server("error", "E-X37: 物理非常停止", "非常停止信号がOFFになりました")
                     else:
                         send_log_to_server("info", "I-X37: 非常停止解除", "装置の再始動が可能")
                 else:
-                    # 通常：ON/OFFでタイトルを分ける
                     if val == 1:
                         send_log_to_server(level, f"{prefix}-{dev}: {name} ON", desc)
                     else:
-                        # OFFはうるさければ info固定にしてもOK
                         send_log_to_server("info", f"{prefix}-{dev}: {name} OFF", desc)
 
                 prev_state[dev] = val
@@ -260,14 +247,13 @@ def monitor_bits(plc, prev_state: dict, bit_map: dict, prefix: str):
             print(f"❌ {prefix}読取エラー {dev}: {e}")
 
 def monitor_plc_once(plc, prev_state: dict):
-    # Dワード
+    # Dは常に監視
     monitor_words(plc, prev_state)
 
-    # X入力
-    monitor_bits(plc, prev_state, X_MAP, prefix="X")
-
-    # Y出力（不要ならこの1行コメントアウトでOK）
-    monitor_bits(plc, prev_state, Y_MAP, prefix="Y")
+    # ALLモードのときだけX/Yを監視
+    if READ_MODE == "ALL":
+        monitor_bits(plc, prev_state, X_MAP, prefix="X")
+        monitor_bits(plc, prev_state, Y_MAP, prefix="Y")
 
 # =========================
 # メイン
@@ -278,6 +264,7 @@ def main():
     prev_state = {}
 
     print(f"🚀 Monitoring Start: {MACHINE_NAME}")
+    print(f"📌 READ_MODE = {READ_MODE} (D=ワードのみ / ALL=ワード+ビット)")
 
     while True:
         if not connected:
