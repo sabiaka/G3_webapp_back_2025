@@ -18,9 +18,7 @@ MACHINE_ID = 1
 MACHINE_NAME = "半自動表層バネどめ機"
 POLL_INTERVAL_SEC = 1.0
 
-# モード切替（環境変数）
-# READ_MODE=D   : Dのみ監視（普段）
-# READ_MODE=ALL : D + X + Y を監視（デバッグ）
+# モード切替
 READ_MODE = os.getenv("READ_MODE", "D").upper()
 
 # =========================
@@ -72,7 +70,7 @@ def read_bit(plc, device):
     return plc.batchread_bitunits(headdevice=device, readsize=1)[0]
 
 # =========================
-# 信号定義（あなたの表を反映）
+# 信号定義
 # =========================
 X_MAP = {
     "X00": ("READY1", "ステッピングモータ1 レディ完了", "info"),
@@ -87,7 +85,6 @@ X_MAP = {
     "X11": ("READY4", "ステッピングモータ4 レディ完了", "info"),
     "X12": ("MOVE4",  "ステッピングモータ4 動作中",     "info"),
     "X13": ("HOMEP4", "ステッピングモータ4 原点復帰完了", "info"),
-
     "X14": ("LS1",  "DCモータ4 前進端", "info"),
     "X15": ("LS2",  "DCモータ4 後退端", "info"),
     "X16": ("LS3",  "DCモータ3 前進端", "info"),
@@ -102,9 +99,8 @@ X_MAP = {
     "X27": ("LS12", "押上部LS4 マット取出位置", "info"),
     "X30": ("PH1",  "押上部LS2 表面ホックリンガ位置", "info"),
     "X31": ("PH2",  "押上部LS3 裏面ホックリンガ位置", "info"),
-
     "X36": ("ALM",  "ステッピングモータ アラーム発生", "error"),
-    "X37": ("P24E", "非常停止中(OFFで動作)", "error"),
+    "X37": ("P24E", "非常停止中", "error"),
 }
 
 Y_MAP = {
@@ -116,80 +112,30 @@ Y_MAP = {
     "Y05": ("HOME3",  "ステッピングモータ3 原点復帰", "info"),
     "Y06": ("START4", "ステッピングモータ4 動作開始", "info"),
     "Y07": ("HOME4",  "ステッピングモータ4 原点復帰", "info"),
-
-    "Y10": ("CW1",  "DCモータ1 正転", "info"),
-    "Y11": ("CCW1", "DCモータ1 逆転", "info"),
-    "Y12": ("CW2",  "DCモータ2 正転", "info"),
-    "Y13": ("CCW2", "DCモータ2 逆転", "info"),
-    "Y14": ("CW3",  "DCモータ3 正転", "info"),
-    "Y15": ("CCW3", "DCモータ3 逆転", "info"),
-    "Y16": ("CW4",  "DCモータ4 正転", "info"),
-    "Y17": ("CCW4", "DCモータ4 逆転", "info"),
-
-    "Y20": ("SW4",   "ACモータ1 動作", "info"),
-    "Y21": ("C/CC4", "ACモータ1 正逆転切り替え", "info"),
-    "Y22": ("EB1",   "ACモータ1 電磁ブレーキ", "info"),
-    "Y23": ("SW5",   "ACモータ2 動作", "info"),
-    "Y24": ("C/CC5", "ACモータ2 正逆転切り替え", "info"),
-    "Y25": ("EB2",   "ACモータ2 電磁ブレーキ", "info"),
-
     "Y26": ("U1", "ソレノイド1", "info"),
     "Y27": ("U2", "ソレノイド2", "info"),
     "Y30": ("U3", "ソレノイド3", "info"),
     "Y31": ("U4", "ソレノイド4", "info"),
-
-    "Y32": ("FWD1", "ステッピングモータ1 正転JOG", "info"),
-    "Y33": ("RVS1", "ステッピングモータ1 逆転JOG", "info"),
-    "Y34": ("FWD2", "ステッピングモータ2 正転JOG", "info"),
-    "Y35": ("RVS2", "ステッピングモータ2 逆転JOG", "info"),
-    "Y36": ("FWD3", "ステッピングモータ3 正転JOG", "info"),
-    "Y37": ("RVS3", "ステッピングモータ3 逆転JOG", "info"),
-    "Y40": ("FWD4", "ステッピングモータ4 正転JOG", "info"),
-    "Y41": ("RVS4", "ステッピングモータ4 逆転JOG", "info"),
-
-    "Y42": ("STOP",    "ステッピングモータ 停止", "info"),
-    "Y43": ("ALM_RST", "ステッピングモータ アラーム解除", "info"),
-
-    "Y44": ("M10", "ステッピングモータ1 データ領域", "info"),
-    "Y45": ("M20", "ステッピングモータ2 データ領域", "info"),
-    "Y46": ("M30", "ステッピングモータ3 データ領域", "info"),
-    "Y47": ("M40", "ステッピングモータ4 データ領域", "info"),
 }
 
 D_DECODE = {
-    "D0":  {1: ("info",    "I-000: PLC 通電完了",      "システム起動確認")},
-    "D1":  {1: ("info",    "I-002: PLC スタンバイ",    "待機状態")},
-    "D2":  {1: ("info",    "I-001: 生産完了",          "マットレス1枚生産終了")},
-
+    "D0":  {1: ("info", "I-000: PLC 通電完了", "システム起動確認")},
+    "D1":  {1: ("info", "I-002: PLC スタンバイ", "待機状態")},
+    "D2":  {1: ("info", "I-001: 生産完了", "マットレス1枚生産終了")},
     "D100": {
         1: ("warning", "W-001: 全ユニット共通エラー", "ユニット全体の確認が必要"),
-        2: ("warning", "W-002: 全ユニット共通エラー", "ユニット全体の確認が必要"),
-        3: ("warning", "W-003: 全ユニット共通エラー", "ユニット全体の確認が必要"),
-        4: ("warning", "W-004: 全ユニット共通エラー", "ユニット全体の確認が必要"),
     },
-    "D101": {1: ("warning", "W-101: ユニット1残弾低下", "補給を準備してください")},
-    "D102": {1: ("warning", "W-102: ユニット2残弾低下", "補給を準備してください")},
-    "D103": {1: ("warning", "W-103: ユニット3残弾低下", "補給を準備してください")},
-    "D104": {1: ("warning", "W-104: ユニット4残弾低下", "補給を準備してください")},
-
     "D900": {
-        1:  ("error", "E-001: 非常停止ボタン作動",     "装置が停止しました"),
-        2:  ("error", "E-002: PLC エラー",             "D900=0002"),
-        3:  ("error", "E-003: PLC エラー",             "D900=0003"),
+        1:  ("error", "E-001: 非常停止ボタン作動", "装置が停止しました"),
         99: ("error", "E-099: その他PLCからの致命的エラー", "PLCシステムの異常停止"),
     },
-    "D901": {1: ("error", "E-901: ユニット1残弾低下(致命)", "停止要因：補給/復旧が必要")},
-    "D902": {1: ("error", "E-902: ユニット2残弾低下(致命)", "停止要因：補給/復旧が必要")},
-    "D903": {1: ("error", "E-903: ユニット3残弾低下(致命)", "停止要因：補給/復旧が必要")},
-    "D904": {1: ("error", "E-904: ユニット4残弾低下(致命)", "停止要因：補給/復旧が必要")},
 }
 
 # =========================
-# 監視ロジック
+# 監視ロジック（修正：0解除を無視）
 # =========================
 def monitor_words(plc, prev_state: dict):
-    d_regs = list(D_DECODE.keys())
-    for reg in d_regs:
+    for reg in D_DECODE.keys():
         try:
             value = read_d_word(plc, reg)
             prev = prev_state.get(reg, None)
@@ -199,23 +145,25 @@ def monitor_words(plc, prev_state: dict):
                 continue
 
             if value != prev:
-                if value == 0 and prev != 0:
-                    send_log_to_server("info", f"I-{reg}: {reg} 解除", f"{reg} が 0 に戻りました（解除）")
-                else:
-                    decode = D_DECODE.get(reg, {})
-                    if value in decode:
-                        log_type, title, msg = decode[value]
-                        send_log_to_server(log_type, title, msg)
+                # 0に戻った時は通知せず状態更新のみ
+                if value == 0:
+                    prev_state[reg] = value
+                    continue
 
-                        if reg == "D1" and value == 1:
-                            call_machine_start()
-                        if reg == "D2" and value == 1:
-                            call_increment_production(section="spring")
-                    else:
-                        send_log_to_server("info", f"I-{reg}: {reg} 変化", f"{reg}={value}（未定義コード）")
+                # ON (値が入った) 時のみ処理
+                decode = D_DECODE.get(reg, {})
+                if value in decode:
+                    log_type, title, msg = decode[value]
+                    send_log_to_server(log_type, title, msg)
+
+                    if reg == "D1" and value == 1:
+                        call_machine_start()
+                    if reg == "D2" and value == 1:
+                        call_increment_production(section="spring")
+                else:
+                    send_log_to_server("info", f"I-{reg}: {reg} 変化", f"{reg}={value}")
 
                 prev_state[reg] = value
-
         except Exception as e:
             print(f"❌ D読取エラー {reg}: {e}")
 
@@ -230,27 +178,17 @@ def monitor_bits(plc, prev_state: dict, bit_map: dict, prefix: str):
                 continue
 
             if val != prev:
-                if dev == "X37":
-                    if val == 0:
-                        send_log_to_server("error", "E-X37: 物理非常停止", "非常停止信号がOFFになりました")
-                    else:
-                        send_log_to_server("info", "I-X37: 非常停止解除", "装置の再始動が可能")
-                else:
-                    if val == 1:
-                        send_log_to_server(level, f"{prefix}-{dev}: {name} ON", desc)
-                    else:
-                        send_log_to_server("info", f"{prefix}-{dev}: {name} OFF", desc)
-
+                # 1 (ON) になった時だけ通知
+                if val == 1:
+                    send_log_to_server(level, f"{prefix}-{dev}: {name} ON", desc)
+                
+                # 0 (OFF) の時は何もしない
                 prev_state[dev] = val
-
         except Exception as e:
             print(f"❌ {prefix}読取エラー {dev}: {e}")
 
 def monitor_plc_once(plc, prev_state: dict):
-    # Dは常に監視
     monitor_words(plc, prev_state)
-
-    # ALLモードのときだけX/Yを監視
     if READ_MODE == "ALL":
         monitor_bits(plc, prev_state, X_MAP, prefix="X")
         monitor_bits(plc, prev_state, Y_MAP, prefix="Y")
@@ -263,8 +201,7 @@ def main():
     connected = False
     prev_state = {}
 
-    print(f"🚀 Monitoring Start: {MACHINE_NAME}")
-    print(f"📌 READ_MODE = {READ_MODE} (D=ワードのみ / ALL=ワード+ビット)")
+    print(f"🚀 Monitoring Start: {MACHINE_NAME} (No-Off-Log Mode)")
 
     while True:
         if not connected:
@@ -280,12 +217,10 @@ def main():
         try:
             monitor_plc_once(plc, prev_state)
         except Exception as e:
-            print(f"❗ 通信切断の可能性: {e}")
+            print(f"❗ 通信切断: {e}")
             connected = False
-            try:
-                plc.close()
-            except Exception:
-                pass
+            try: plc.close()
+            except: pass
 
         time.sleep(POLL_INTERVAL_SEC)
 
